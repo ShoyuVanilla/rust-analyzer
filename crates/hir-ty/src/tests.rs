@@ -9,6 +9,7 @@ mod macros;
 mod display_source_code;
 mod incremental;
 mod diagnostics;
+mod diverging_fallback;
 
 use std::{collections::HashMap, env};
 
