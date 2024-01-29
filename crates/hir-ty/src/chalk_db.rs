@@ -362,6 +362,7 @@ impl chalk_solve::RustIrDatabase<Interner> for ChalkContext<'_> {
         _substs: &chalk_ir::Substitution<Interner>,
     ) -> rust_ir::ClosureKind {
         // Fn is the closure kind that implements all three traits
+        // TODO: This seems suspicious
         rust_ir::ClosureKind::Fn
     }
     fn closure_inputs_and_output(

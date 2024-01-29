@@ -14,6 +14,24 @@ fn test() {
     );
 }
 
+// TODO: Move to proper location
+#[test]
+fn infer_fn_types_check() {
+    check_types(
+        r#"
+//- minicore: fn
+struct Foo<F: FnOnce(i32)>(F);
+
+fn test() {
+    let mut a = 0;
+    let foo = Foo(move |val| { a = val; });
+    let t = foo.0;
+    t;
+} //^ impl FnOnce(i32)
+"#,
+    );
+}
+
 #[test]
 fn infer_never2() {
     check_types(

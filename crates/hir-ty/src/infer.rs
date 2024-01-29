@@ -544,7 +544,7 @@ pub(crate) struct InferenceContext<'a> {
     /// Stores the list of closure ids that need to be analyzed before this closure. See the
     /// comment on `InferenceContext::sort_closures`
     closure_dependencies: FxHashMap<ClosureId, Vec<ClosureId>>,
-    deferred_closures: FxHashMap<ClosureId, Vec<(Ty, Ty, Vec<Ty>, ExprId)>>,
+    deferred_closures: FxHashMap<ClosureId, (Vec<(Ty, Ty, Vec<Ty>, ExprId)>, Expectation)>,
 }
 
 #[derive(Clone, Debug)]
