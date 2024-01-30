@@ -229,8 +229,20 @@ impl InferenceContext<'_> {
         from_ty: &Ty,
         to_ty: &Ty,
     ) -> Result<Ty, TypeError> {
-        let from_ty = self.resolve_ty_shallow(from_ty);
+        let mut from_ty = self.resolve_ty_shallow(from_ty);
         let to_ty = self.resolve_ty_shallow(to_ty);
+        let mut proxy_ty = None;
+        if let Some((_, ty)) = from_ty
+            .as_closure()
+            .as_ref()
+            .map(|closure| self.deferred_closures.get(closure).cloned())
+            .flatten()
+        {
+            proxy_ty = Some(ty);
+        }
+        if let Some(proxy_ty) = proxy_ty {
+            from_ty = self.resolve_ty_shallow(&proxy_ty);
+        }
         let (adjustments, ty) = self.table.coerce(&from_ty, &to_ty)?;
         if let Some(expr) = expr {
             self.write_expr_adj(expr, adjustments);

@@ -515,7 +515,7 @@ pub(crate) struct InferenceContext<'a> {
     pub(crate) owner: DefWithBodyId,
     pub(crate) body: &'a Body,
     pub(crate) resolver: Resolver,
-    table: unify::InferenceTable<'a>,
+    pub(crate) table: unify::InferenceTable<'a>,
     /// The traits in scope, disregarding block modules. This is used for caching purposes.
     traits_in_scope: FxHashSet<TraitId>,
     pub(crate) result: InferenceResult,
@@ -544,7 +544,7 @@ pub(crate) struct InferenceContext<'a> {
     /// Stores the list of closure ids that need to be analyzed before this closure. See the
     /// comment on `InferenceContext::sort_closures`
     closure_dependencies: FxHashMap<ClosureId, Vec<ClosureId>>,
-    deferred_closures: FxHashMap<ClosureId, (Vec<(Ty, Ty, Vec<Ty>, ExprId)>, Expectation)>,
+    deferred_closures: FxHashMap<ClosureId, (Vec<(Ty, Ty, Vec<Ty>, ExprId)>, Ty)>,
 }
 
 #[derive(Clone, Debug)]

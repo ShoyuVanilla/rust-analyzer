@@ -5,7 +5,8 @@ use std::{cmp, convert::Infallible, mem};
 use chalk_ir::{
     cast::Cast,
     fold::{FallibleTypeFolder, TypeFoldable},
-    AliasEq, AliasTy, BoundVar, DebruijnIndex, FnSubst, Mutability, TyKind, WhereClause,
+    AliasEq, AliasTy, BoundVar, Canonical, DebruijnIndex, FnSubst, Goal, Mutability, TyKind,
+    WhereClause,
 };
 use either::Either;
 use hir_def::{
@@ -28,11 +29,11 @@ use crate::{
     static_lifetime, to_chalk_trait_id,
     traits::FnTrait,
     utils::{self, generics, Generics},
-    Adjust, Adjustment, Binders, BindingMode, ChalkTraitId, ClosureId, DynTy, FnAbi, FnPointer,
-    FnSig, Interner, Substitution, Ty, TyExt,
+    Adjust, Adjustment, Binders, BindingMode, ChalkTraitId, ClosureId, DomainGoal, DynTy, FnAbi,
+    FnPointer, FnSig, GoalData, InEnvironment, Interner, Substitution, TraitRef, Ty, TyExt,
 };
 
-use super::{Expectation, InferenceContext};
+use super::{unify::Canonicalized, Expectation, InferenceContext};
 
 impl InferenceContext<'_> {
     // This function handles both closures and coroutines.
@@ -972,43 +973,33 @@ impl InferenceContext<'_> {
 
     pub(crate) fn infer_closures(&mut self) {
         let deferred_closures = self.sort_closures();
-        for (closure, exprs, expected) in deferred_closures.into_iter().rev() {
+        for (closure, exprs, proxy_ty) in deferred_closures.into_iter().rev() {
             self.current_captures = vec![];
-            let fn_trait = FnTrait::Fn.get_id(self.db, self.resolver.krate());
-            let fn_mut_trait = FnTrait::FnMut.get_id(self.db, self.resolver.krate());
-            let fn_once_trait = FnTrait::FnOnce.get_id(self.db, self.resolver.krate());
-            let kind = match (expected, fn_trait, fn_mut_trait, fn_once_trait) {
-                (
-                    Expectation::HasType(expected),
-                    Some(fn_trait),
-                    Some(fn_mut_trait),
-                    Some(fn_once_trait),
-                ) => {
-                    let canonical = self.canonicalize(expected).value;
-                    let env = self.db.trait_environment_for_body(self.owner);
-                    if implements_trait_unique(&canonical, self.db, env.clone(), fn_trait) {
-                        Some(FnTrait::Fn)
-                    } else if implements_trait_unique(
-                        &canonical,
-                        self.db,
-                        env.clone(),
-                        fn_mut_trait,
-                    ) {
-                        Some(FnTrait::FnMut)
-                    } else if implements_trait_unique(
-                        &canonical,
-                        self.db,
-                        env.clone(),
-                        fn_once_trait,
-                    ) {
-                        Some(FnTrait::FnOnce)
+            let v: Vec<_> = self
+                .table
+                .iter_pending_obligations()
+                .filter_map(|c| {
+                    let uncanonical =
+                        chalk_ir::Substitute::apply(&c.free_vars, c.value.value.clone(), Interner);
+                    dbg!(&uncanonical);
+                    if let GoalData::DomainGoal(DomainGoal::Holds(WhereClause::Implemented(
+                        TraitRef { trait_id, substitution },
+                    ))) = uncanonical.goal.data(Interner)
+                    {
+                        dbg!(trait_id);
+                        dbg!(substitution);
+                        substitution.type_parameters(Interner).next()
                     } else {
                         None
                     }
-                }
-                _ => None,
-            };
-            let kind = self.analyze_closure(closure, kind);
+                })
+                .collect();
+            v.iter().for_each(|v| {
+                dbg!(self.table.var_unification_table.ty_root(Interner, v));
+            });
+            dbg!(self.table.var_unification_table.ty_root(Interner, &proxy_ty));
+
+            let kind = self.analyze_closure(closure, None);
 
             for (derefed_callee, callee_ty, params, expr) in exprs {
                 if let &Expr::Call { callee, .. } = &self.body[expr] {
@@ -1036,7 +1027,7 @@ impl InferenceContext<'_> {
     ///
     /// These dependencies are collected in the main inference. We do a topological sort in this function. It
     /// will consume the `deferred_closures` field and return its content in a sorted vector.
-    fn sort_closures(&mut self) -> Vec<(ClosureId, Vec<(Ty, Ty, Vec<Ty>, ExprId)>, Expectation)> {
+    fn sort_closures(&mut self) -> Vec<(ClosureId, Vec<(Ty, Ty, Vec<Ty>, ExprId)>, Ty)> {
         let mut deferred_closures = mem::take(&mut self.deferred_closures);
         let mut dependents_count: FxHashMap<ClosureId, usize> =
             deferred_closures.keys().map(|it| (*it, 0)).collect();

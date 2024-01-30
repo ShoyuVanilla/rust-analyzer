@@ -39,7 +39,7 @@ where
     T: HasInterner<Interner = Interner>,
 {
     pub(crate) value: Canonical<T>,
-    free_vars: Vec<GenericArg>,
+    pub(crate) free_vars: Vec<GenericArg>,
 }
 
 impl<T: HasInterner<Interner = Interner>> Canonicalized<T> {
@@ -140,7 +140,7 @@ type ChalkInferenceTable = chalk_solve::infer::InferenceTable<Interner>;
 pub(crate) struct InferenceTable<'a> {
     pub(crate) db: &'a dyn HirDatabase,
     pub(crate) trait_env: Arc<TraitEnvironment>,
-    var_unification_table: ChalkInferenceTable,
+    pub(crate) var_unification_table: ChalkInferenceTable,
     type_variable_table: Vec<TypeVariableFlags>,
     pending_obligations: Vec<Canonicalized<InEnvironment<Goal>>>,
     /// Double buffer used in [`Self::resolve_obligations_as_possible`] to cut down on
@@ -789,6 +789,12 @@ impl<'a> InferenceTable<'a> {
             },
             _ => c,
         }
+    }
+
+    pub(super) fn iter_pending_obligations(
+        &self,
+    ) -> impl Iterator<Item = &Canonicalized<InEnvironment<Goal>>> {
+        self.pending_obligations.iter()
     }
 }
 

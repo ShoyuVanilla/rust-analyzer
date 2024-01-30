@@ -267,7 +267,7 @@ impl InferenceContext<'_> {
                         .intern(Interner);
                         self.deferred_closures
                             .entry(closure_id)
-                            .or_insert((Vec::new(), expected.clone()));
+                            .or_insert_with(|| (Vec::new(), self.table.new_type_var()));
                         if let Some(c) = self.current_closure {
                             self.closure_dependencies.entry(c).or_default().push(closure_id);
                         }
@@ -335,7 +335,7 @@ impl InferenceContext<'_> {
                             }
                             self.deferred_closures
                                 .entry(*c)
-                                .or_insert((Vec::new(), Expectation::none()))
+                                .or_insert_with(|| (Vec::new(), self.table.new_type_var()))
                                 .0
                                 .push((
                                     derefed_callee.clone(),
