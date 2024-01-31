@@ -229,20 +229,8 @@ impl InferenceContext<'_> {
         from_ty: &Ty,
         to_ty: &Ty,
     ) -> Result<Ty, TypeError> {
-        let mut from_ty = self.resolve_ty_shallow(from_ty);
+        let from_ty = self.resolve_ty_shallow(from_ty);
         let to_ty = self.resolve_ty_shallow(to_ty);
-        let mut proxy_ty = None;
-        if let Some((_, ty)) = from_ty
-            .as_closure()
-            .as_ref()
-            .map(|closure| self.deferred_closures.get(closure).cloned())
-            .flatten()
-        {
-            proxy_ty = Some(ty);
-        }
-        if let Some(proxy_ty) = proxy_ty {
-            from_ty = self.resolve_ty_shallow(&proxy_ty);
-        }
         let (adjustments, ty) = self.table.coerce(&from_ty, &to_ty)?;
         if let Some(expr) = expr {
             self.write_expr_adj(expr, adjustments);
@@ -287,6 +275,17 @@ impl InferenceTable<'_> {
             }
             return success(simple(Adjust::NeverToAny)(to_ty.clone()), to_ty.clone(), vec![]);
         }
+
+        let from_ty = if let Some(closure) = from_ty.as_closure() {
+            if let Some((proxy_ty, proxied_tys)) = self.closure_proxy_tys.get_mut(&closure) {
+                proxied_tys.insert(from_ty);
+                proxy_ty.clone()
+            } else {
+                from_ty
+            }
+        } else {
+            from_ty
+        };
 
         // Consider coercing the subtype to a DST
         if let Ok(ret) = self.try_coerce_unsized(&from_ty, to_ty) {

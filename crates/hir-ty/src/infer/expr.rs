@@ -265,9 +265,8 @@ impl InferenceContext<'_> {
                             TyBuilder::subst_for_closure(self.db, self.owner, sig_ty.clone()),
                         )
                         .intern(Interner);
-                        self.deferred_closures
-                            .entry(closure_id)
-                            .or_insert_with(|| (Vec::new(), self.table.new_type_var()));
+                        self.table.register_closure(&closure_id);
+                        self.deferred_closures.entry(closure_id).or_default();
                         if let Some(c) = self.current_closure {
                             self.closure_dependencies.entry(c).or_default().push(closure_id);
                         }
@@ -333,16 +332,13 @@ impl InferenceContext<'_> {
                             if let Some(par) = self.current_closure {
                                 self.closure_dependencies.entry(par).or_default().push(*c);
                             }
-                            self.deferred_closures
-                                .entry(*c)
-                                .or_insert_with(|| (Vec::new(), self.table.new_type_var()))
-                                .0
-                                .push((
-                                    derefed_callee.clone(),
-                                    callee_ty.clone(),
-                                    params.clone(),
-                                    tgt_expr,
-                                ));
+                            self.table.register_closure(c);
+                            self.deferred_closures.entry(*c).or_default().push((
+                                derefed_callee.clone(),
+                                callee_ty.clone(),
+                                params.clone(),
+                                tgt_expr,
+                            ));
                         }
                         if let Some(fn_x) = func {
                             self.write_fn_trait_method_resolution(

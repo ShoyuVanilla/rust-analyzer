@@ -4,21 +4,22 @@ use std::{fmt, iter, mem};
 
 use chalk_ir::{
     cast::Cast, fold::TypeFoldable, interner::HasInterner, zip::Zip, CanonicalVarKind, FloatTy,
-    IntTy, TyVariableKind, UniverseIndex,
+    IntTy, TyVariableKind, UniverseIndex, WhereClause,
 };
 use chalk_solve::infer::ParameterEnaVariableExt;
 use either::Either;
 use ena::unify::UnifyKey;
 use hir_expand::name;
+use rustc_hash::{FxHashMap, FxHashSet};
 use triomphe::Arc;
 
 use super::{InferOk, InferResult, InferenceContext, TypeError};
 use crate::{
     consteval::unknown_const, db::HirDatabase, fold_tys_and_consts, static_lifetime,
-    to_chalk_trait_id, traits::FnTrait, AliasEq, AliasTy, BoundVar, Canonical, Const, ConstValue,
-    DebruijnIndex, GenericArg, GenericArgData, Goal, Guidance, InEnvironment, InferenceVar,
-    Interner, Lifetime, ParamKind, ProjectionTy, ProjectionTyExt, Scalar, Solution, Substitution,
-    TraitEnvironment, Ty, TyBuilder, TyExt, TyKind, VariableKind,
+    to_chalk_trait_id, traits::FnTrait, AliasEq, AliasTy, BoundVar, Canonical, ClosureId, Const,
+    ConstValue, DebruijnIndex, DomainGoal, GenericArg, GenericArgData, Goal, GoalData, Guidance,
+    InEnvironment, InferenceVar, Interner, Lifetime, ParamKind, ProjectionTy, ProjectionTyExt,
+    Scalar, Solution, Substitution, TraitEnvironment, Ty, TyBuilder, TyExt, TyKind, VariableKind,
 };
 
 impl InferenceContext<'_> {
@@ -140,7 +141,8 @@ type ChalkInferenceTable = chalk_solve::infer::InferenceTable<Interner>;
 pub(crate) struct InferenceTable<'a> {
     pub(crate) db: &'a dyn HirDatabase,
     pub(crate) trait_env: Arc<TraitEnvironment>,
-    pub(crate) var_unification_table: ChalkInferenceTable,
+    pub(super) closure_proxy_tys: FxHashMap<ClosureId, (Ty, FxHashSet<Ty>)>,
+    var_unification_table: ChalkInferenceTable,
     type_variable_table: Vec<TypeVariableFlags>,
     pending_obligations: Vec<Canonicalized<InEnvironment<Goal>>>,
     /// Double buffer used in [`Self::resolve_obligations_as_possible`] to cut down on
@@ -159,6 +161,7 @@ impl<'a> InferenceTable<'a> {
         InferenceTable {
             db,
             trait_env,
+            closure_proxy_tys: FxHashMap::default(),
             var_unification_table: ChalkInferenceTable::new(),
             type_variable_table: Vec::new(),
             pending_obligations: Vec::new(),
@@ -322,6 +325,21 @@ impl<'a> InferenceTable<'a> {
     pub(crate) fn new_lifetime_var(&mut self) -> Lifetime {
         let var = self.var_unification_table.new_variable(UniverseIndex::ROOT);
         var.to_lifetime(Interner)
+    }
+
+    pub(crate) fn register_closure(&mut self, closure: &ClosureId) {
+        if !self.closure_proxy_tys.contains_key(closure) {
+            let proxy_ty = self.new_type_var();
+            self.closure_proxy_tys.insert(closure.clone(), (proxy_ty, FxHashSet::default()));
+        }
+    }
+
+    pub(crate) fn finish_closure_inference(&mut self, closure: &ClosureId) {
+        if let Some((proxy_ty, tys)) = self.closure_proxy_tys.remove(closure) {
+            tys.iter().for_each(|ty| {
+                let _ = self.coerce(ty, &proxy_ty);
+            });
+        }
     }
 
     pub(crate) fn resolve_with_fallback<T>(
@@ -791,10 +809,50 @@ impl<'a> InferenceTable<'a> {
         }
     }
 
-    pub(super) fn iter_pending_obligations(
-        &self,
-    ) -> impl Iterator<Item = &Canonicalized<InEnvironment<Goal>>> {
-        self.pending_obligations.iter()
+    pub(super) fn get_closure_fn_trait_predicate(
+        &mut self,
+        closure: &ClosureId,
+    ) -> Option<FnTrait> {
+        let proxy_ty = &self.closure_proxy_tys.get(closure).as_ref()?.0;
+        let proxy_ty = self.var_unification_table.ty_root(Interner, &proxy_ty)?;
+
+        let krate = self.trait_env.krate;
+        let fn_trait_id = to_chalk_trait_id(FnTrait::Fn.get_id(self.db, krate)?);
+        let fn_mut_trait_id = to_chalk_trait_id(FnTrait::FnMut.get_id(self.db, krate)?);
+        let fn_once_trait_id = to_chalk_trait_id(FnTrait::FnOnce.get_id(self.db, krate)?);
+
+        let predicate = self
+            .pending_obligations
+            .iter()
+            .filter_map(|c| {
+                let uncanonical =
+                    chalk_ir::Substitute::apply(&c.free_vars, c.value.value.clone(), Interner);
+                if let GoalData::DomainGoal(DomainGoal::Holds(WhereClause::Implemented(t))) =
+                    uncanonical.goal.data(Interner)
+                {
+                    for (fn_x_trait_id, fn_x_trait) in [
+                        (fn_trait_id, FnTrait::Fn),
+                        (fn_mut_trait_id, FnTrait::FnMut),
+                        (fn_once_trait_id, FnTrait::FnOnce),
+                    ] {
+                        if fn_x_trait_id != t.trait_id {
+                            continue;
+                        }
+                        let ty = t.substitution.type_parameters(Interner).next()?;
+                        if self.var_unification_table.ty_root(Interner, &ty)? == proxy_ty {
+                            return Some(fn_x_trait);
+                        } else {
+                            continue;
+                        }
+                    }
+                    return None;
+                } else {
+                    None
+                }
+            })
+            .fold(None, |acc, x| Some(std::cmp::max(acc.unwrap_or(FnTrait::FnOnce), x)));
+
+        predicate
     }
 }
 

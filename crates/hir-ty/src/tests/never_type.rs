@@ -20,7 +20,7 @@ fn infer_fn_types_check() {
     check_types(
         r#"
 //- minicore: fn
-struct Foo<F: FnOnce(i32)>(F);
+struct Foo<F: FnOnce>(F);
 
 fn test() {
     let mut a = 0;
