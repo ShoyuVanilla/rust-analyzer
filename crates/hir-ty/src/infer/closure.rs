@@ -28,7 +28,7 @@ use crate::{
     traits::FnTrait,
     utils::{self, generics, Generics},
     Adjust, Adjustment, Binders, BindingMode, ChalkTraitId, ClosureId, DynTy, FnAbi, FnPointer,
-    FnSig, Interner, Substitution, Ty, TyExt,
+    FnSig, ImplTraitId, Interner, OpaqueTy, Substitution, Ty, TyExt,
 };
 
 use super::{Expectation, InferenceContext};
@@ -47,6 +47,11 @@ impl InferenceContext<'_> {
             None => return,
         };
 
+        dbg!(&expected_ty);
+
+        dbg!(&self.table.pending_obligations);
+        self.deduce_closure_kind_from_expectations(&expected_ty);
+
         // Deduction from where-clauses in scope, as well as fn-pointer coercion are handled here.
         let _ = self.coerce(Some(closure_expr), closure_ty, &expected_ty);
 
@@ -64,6 +69,34 @@ impl InferenceContext<'_> {
             }
         }
     }
+
+    fn deduce_closure_kind_from_expectations(&mut self, expected_ty: &Ty) -> Option<FnTrait> {
+        match expected_ty.kind(Interner) {
+            TyKind::Alias(AliasTy::Opaque(OpaqueTy { .. })) | TyKind::OpaqueType(..) => {
+                println!("1");
+                let predicates = expected_ty
+                    .impl_trait_bounds(self.db)
+                    .iter()
+                    .flatten()
+                    .map(|b| b.skip_binders());
+            }
+            TyKind::Dyn(dyn_ty) => {
+                println!("2");
+                // let bounds = dyn_ty.bounds.clone().substitute(Interner, )
+            }
+            TyKind::InferenceVar(ty, chalk_ir::TyVariableKind::General) => {
+                println!("3");
+            }
+            TyKind::Function(_) => {
+                println!("4");
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    fn deduce_closure_kind_from_predicates() {}
 
     fn deduce_sig_from_dyn_ty(&self, dyn_ty: &DynTy) -> Option<FnPointer> {
         // Search for a predicate like `<$self as FnX<Args>>::Output == Ret`
@@ -960,6 +993,7 @@ impl InferenceContext<'_> {
         self.restrict_precision_for_unsafe();
         // closure_kind should be done before adjust_for_move_closure
         let closure_kind = self.closure_kind();
+        dbg!(&closure_kind);
         match capture_by {
             CaptureBy::Value => self.adjust_for_move_closure(),
             CaptureBy::Ref => (),

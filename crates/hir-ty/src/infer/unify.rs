@@ -16,9 +16,10 @@ use super::{InferOk, InferResult, InferenceContext, TypeError};
 use crate::{
     consteval::unknown_const, db::HirDatabase, fold_tys_and_consts, static_lifetime,
     to_chalk_trait_id, traits::FnTrait, AliasEq, AliasTy, BoundVar, Canonical, Const, ConstValue,
-    DebruijnIndex, GenericArg, GenericArgData, Goal, Guidance, InEnvironment, InferenceVar,
-    Interner, Lifetime, ParamKind, ProjectionTy, ProjectionTyExt, Scalar, Solution, Substitution,
-    TraitEnvironment, Ty, TyBuilder, TyExt, TyKind, VariableKind,
+    DebruijnIndex, DomainGoal, GenericArg, GenericArgData, Goal, GoalData, Guidance, InEnvironment,
+    InferenceVar, Interner, Lifetime, ParamKind, ProjectionTy, ProjectionTyExt, Scalar, Solution,
+    Substitution, TraitEnvironment, TraitRef, Ty, TyBuilder, TyExt, TyKind, VariableKind,
+    WhereClause,
 };
 
 impl InferenceContext<'_> {
@@ -30,6 +31,26 @@ impl InferenceContext<'_> {
         T: HasInterner<Interner = Interner>,
     {
         self.table.canonicalize(t)
+    }
+
+    pub(super) fn obligations_for_self_ty(&mut self, self_ty: &Ty) {
+        let root = self.table.var_unification_table.ty_root(Interner, self_ty);
+
+        self.table.pending_obligations.iter().next().map(|obligation| {
+            match obligation.value.value.goal.data(Interner) {
+                GoalData::DomainGoal(DomainGoal::Holds(WhereClause::Implemented(trait_ref)))
+                    if trait_ref.substitution.iter(Interner).next().map(|arg| {
+                        arg.ty(Interner).map_or(false, |ty| {
+                            (self.table.var_unification_table.ty_root(Interner, ty).unwrap()
+                                == root.unwrap())
+                        })
+                    }) =>
+                {
+                    false
+                }
+                _ => {}
+            }
+        });
     }
 }
 
@@ -177,7 +198,7 @@ pub(crate) struct InferenceTable<'a> {
     pub(crate) trait_env: Arc<TraitEnvironment>,
     var_unification_table: ChalkInferenceTable,
     type_variable_table: Vec<TypeVariableFlags>,
-    pending_obligations: Vec<Canonicalized<InEnvironment<Goal>>>,
+    pub(crate) pending_obligations: Vec<Canonicalized<InEnvironment<Goal>>>,
     /// Double buffer used in [`Self::resolve_obligations_as_possible`] to cut down on
     /// temporary allocations.
     resolve_obligations_buffer: Vec<Canonicalized<InEnvironment<Goal>>>,

@@ -19,6 +19,30 @@ fn test() {
 }
 
 #[test]
+fn foobarbaz() {
+    check_types(
+        r#"
+//- minicore: fn
+struct Foo<T: FnMut()>(T);
+
+fn ah() -> impl FnOnce() {
+    || {}
+}
+
+fn oh(x: impl FnOnce()) {}
+
+fn test() {
+    let a = Foo(|| {});
+    let b = a.0;
+     // ^ impl FnOnce();
+    (ah())();
+    oh(|| {});
+}
+"#,
+    );
+}
+
+#[test]
 fn self_in_struct_lit() {
     check_infer(
         r#"
