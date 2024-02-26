@@ -1,7 +1,5 @@
 //! MIR lowering for places
 
-use crate::mir::MutBorrowKind;
-
 use super::*;
 use hir_def::FunctionId;
 use hir_expand::name;
@@ -330,7 +328,7 @@ impl MirLowerCtx<'_> {
                 Mutability::Mut,
                 LangItem::DerefMut,
                 name![deref_mut],
-                BorrowKind::Mut { kind: MutBorrowKind::Default },
+                BorrowKind::Mut { allow_two_phase_borrow: false },
             )
         };
         let ty_ref = TyKind::Ref(chalk_mut, static_lifetime(), source_ty.clone()).intern(Interner);

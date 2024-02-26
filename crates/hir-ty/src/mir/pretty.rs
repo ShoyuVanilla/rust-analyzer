@@ -18,8 +18,7 @@ use crate::{
 };
 
 use super::{
-    AggregateKind, BasicBlockId, BorrowKind, LocalId, MirBody, MutBorrowKind, Operand, Place,
-    Rvalue, UnOp,
+    AggregateKind, BasicBlockId, BorrowKind, LocalId, MirBody, Operand, Place, Rvalue, UnOp,
 };
 
 macro_rules! w {
@@ -367,10 +366,8 @@ impl<'a> MirPrettyCtx<'a> {
                 match r {
                     BorrowKind::Shared => w!(self, "&"),
                     BorrowKind::Shallow => w!(self, "&shallow "),
-                    BorrowKind::Mut { kind: MutBorrowKind::ClosureCapture } => w!(self, "&uniq "),
-                    BorrowKind::Mut {
-                        kind: MutBorrowKind::Default | MutBorrowKind::TwoPhasedBorrow,
-                    } => w!(self, "&mut "),
+                    BorrowKind::Unique => w!(self, "&uniq "),
+                    BorrowKind::Mut { .. } => w!(self, "&mut "),
                 }
                 self.place(p);
             }

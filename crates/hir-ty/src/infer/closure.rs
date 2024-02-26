@@ -23,7 +23,7 @@ use stdx::never;
 use crate::{
     db::{HirDatabase, InternedClosure},
     from_placeholder_idx, make_binders,
-    mir::{BorrowKind, MirSpan, MutBorrowKind, ProjectionElem},
+    mir::{BorrowKind, MirSpan, ProjectionElem},
     static_lifetime, to_chalk_trait_id,
     traits::FnTrait,
     utils::{self, generics, Generics},
@@ -142,13 +142,9 @@ impl HirPlace {
         mut current_capture: CaptureKind,
         len: usize,
     ) -> CaptureKind {
-        if let CaptureKind::ByRef(BorrowKind::Mut {
-            kind: MutBorrowKind::Default | MutBorrowKind::TwoPhasedBorrow,
-        }) = current_capture
-        {
+        if let CaptureKind::ByRef(BorrowKind::Mut { .. }) = current_capture {
             if self.projections[len..].iter().any(|it| *it == ProjectionElem::Deref) {
-                current_capture =
-                    CaptureKind::ByRef(BorrowKind::Mut { kind: MutBorrowKind::ClosureCapture });
+                current_capture = CaptureKind::ByRef(BorrowKind::Unique);
             }
         }
         current_capture
@@ -381,7 +377,7 @@ impl InferenceContext<'_> {
         if let Some(place) = self.place_of_expr(expr) {
             self.add_capture(
                 place,
-                CaptureKind::ByRef(BorrowKind::Mut { kind: MutBorrowKind::Default }),
+                CaptureKind::ByRef(BorrowKind::Mut { allow_two_phase_borrow: false }),
                 expr.into(),
             );
         }
@@ -430,7 +426,9 @@ impl InferenceContext<'_> {
 
     fn ref_capture_with_adjusts(&mut self, m: Mutability, tgt_expr: ExprId, rest: &[Adjustment]) {
         let capture_kind = match m {
-            Mutability::Mut => CaptureKind::ByRef(BorrowKind::Mut { kind: MutBorrowKind::Default }),
+            Mutability::Mut => {
+                CaptureKind::ByRef(BorrowKind::Mut { allow_two_phase_borrow: false })
+            }
             Mutability::Not => CaptureKind::ByRef(BorrowKind::Shared),
         };
         if let Some(place) = self.place_of_expr_without_adjust(tgt_expr) {
@@ -650,7 +648,7 @@ impl InferenceContext<'_> {
         self.walk_pat_inner(
             pat,
             &mut update_result,
-            BorrowKind::Mut { kind: MutBorrowKind::Default },
+            BorrowKind::Mut { allow_two_phase_borrow: false },
         );
     }
 
@@ -701,7 +699,7 @@ impl InferenceContext<'_> {
             },
         }
         if self.result.pat_adjustments.get(&p).map_or(false, |it| !it.is_empty()) {
-            for_mut = BorrowKind::Mut { kind: MutBorrowKind::ClosureCapture };
+            for_mut = BorrowKind::Unique;
         }
         self.body.walk_pats_shallow(p, |p| self.walk_pat_inner(p, update_result, for_mut));
     }
@@ -882,7 +880,7 @@ impl InferenceContext<'_> {
                     }
                     BindingMode::Ref(Mutability::Not) => BorrowKind::Shared,
                     BindingMode::Ref(Mutability::Mut) => {
-                        BorrowKind::Mut { kind: MutBorrowKind::Default }
+                        BorrowKind::Mut { allow_two_phase_borrow: false }
                     }
                 };
                 self.add_capture(place, CaptureKind::ByRef(capture_kind), pat.into());
@@ -932,7 +930,9 @@ impl InferenceContext<'_> {
             r = cmp::min(
                 r,
                 match &it.kind {
-                    CaptureKind::ByRef(BorrowKind::Mut { .. }) => FnTrait::FnMut,
+                    CaptureKind::ByRef(BorrowKind::Unique | BorrowKind::Mut { .. }) => {
+                        FnTrait::FnMut
+                    }
                     CaptureKind::ByRef(BorrowKind::Shallow | BorrowKind::Shared) => FnTrait::Fn,
                     CaptureKind::ByValue => FnTrait::FnOnce,
                 },
@@ -949,12 +949,8 @@ impl InferenceContext<'_> {
         };
         self.consume_expr(*body);
         for item in &self.current_captures {
-            if matches!(
-                item.kind,
-                CaptureKind::ByRef(BorrowKind::Mut {
-                    kind: MutBorrowKind::Default | MutBorrowKind::TwoPhasedBorrow
-                })
-            ) && !item.place.projections.contains(&ProjectionElem::Deref)
+            if matches!(item.kind, CaptureKind::ByRef(BorrowKind::Mut { .. }))
+                && !item.place.projections.contains(&ProjectionElem::Deref)
             {
                 // FIXME: remove the `mutated_bindings_in_closure` completely and add proper fake reads in
                 // MIR. I didn't do that due duplicate diagnostics.
