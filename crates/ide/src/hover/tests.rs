@@ -8602,3 +8602,51 @@ fn test() {
         "#]],
     );
 }
+
+#[test]
+fn debug_object_safety_1() {
+    check(
+        r#"
+struct Box<T>(*const T);
+trait Foo$0<'a, T, U> {
+    fn foo(self: Box<Self>);
+}
+"#,
+        expect![[r#"
+            *Foo*
+
+            ```rust
+            test
+            ```
+
+            ```rust
+            Ok(None)
+            trait Foo<'a, T, U>
+            ```
+        "#]],
+    );
+}
+
+#[test]
+fn debug_object_safety_2() {
+    check(
+        r#"
+struct NonBox<T>(T);
+trait Foo$0<T, U> {
+    fn check(self: NonBox<Self>);
+}
+"#,
+        expect![[r#"
+            *Foo*
+
+            ```rust
+            test
+            ```
+
+            ```rust
+            Ok(Some(Method(FunctionId(0), UndispatchableReceiver)))
+            trait Foo<T, U>
+            ```
+        "#]],
+    );
+}

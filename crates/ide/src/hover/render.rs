@@ -4,7 +4,7 @@ use std::{mem, ops::Not};
 use either::Either;
 use hir::{
     Adt, AsAssocItem, AsExternAssocItem, CaptureKind, HasCrate, HasSource, HirDisplay, Layout,
-    LayoutError, Name, Semantics, Trait, Type, TypeInfo,
+    LayoutError, Name, ObjectSafetyError, ObjectSafetyViolation, Semantics, Trait, Type, TypeInfo,
 };
 use ide_db::{
     base_db::SourceDatabase,
@@ -509,6 +509,12 @@ pub(super) fn definition(
         _ => None,
     };
 
+    let object_safety_info = if let Definition::Trait(it) = def {
+        render_object_safety(it.object_safety(db))
+    } else {
+        None
+    };
+
     let mut desc = String::new();
     if let Some(notable_traits) = render_notable_trait_comment(db, notable_traits) {
         desc.push_str(&notable_traits);
@@ -516,6 +522,10 @@ pub(super) fn definition(
     }
     if let Some(layout_info) = layout_info {
         desc.push_str(&layout_info);
+        desc.push('\n');
+    }
+    if let Some(object_safety_info) = object_safety_info {
+        desc.push_str(&object_safety_info);
         desc.push('\n');
     }
     desc.push_str(&label);
@@ -933,4 +943,11 @@ fn keyword_hints(
         T![Self] => KeywordHint::new(token.text().to_owned(), "self_upper_keyword".into()),
         _ => KeywordHint::new(token.text().to_owned(), format!("{}_keyword", token.text())),
     }
+}
+
+fn render_object_safety(
+    safety: Result<Option<ObjectSafetyViolation>, ObjectSafetyError>,
+) -> Option<String> {
+    // TODO: not implemened
+    Some(format!("{safety:?}"))
 }
