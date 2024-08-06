@@ -18,7 +18,7 @@ pub enum ObjectSafetyError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectSafetyViolation {
     SizedSelf,
-    SelfReferencial,
+    SelfReferential,
     NonLifetimeBinder,
     Method(FunctionId, MethodViolationCode),
     AssocConst(ConstId),

@@ -948,6 +948,6 @@ fn keyword_hints(
 fn render_object_safety(
     safety: Result<Option<ObjectSafetyViolation>, ObjectSafetyError>,
 ) -> Option<String> {
-    // TODO: not implemened
+    // TODO: not implemented
     Some(format!("{safety:?}"))
 }
