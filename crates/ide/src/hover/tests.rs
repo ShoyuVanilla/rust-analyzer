@@ -7107,6 +7107,7 @@ impl T$0 for () {}
             ```
 
             ```rust
+            Ok(None)
             trait T {}
             ```
         "#]],
@@ -7126,6 +7127,7 @@ impl T$0 for () {}
             ```
 
             ```rust
+            Ok(None)
             trait T {}
             ```
         "#]],
@@ -7149,6 +7151,7 @@ impl T$0 for () {}
             ```
 
             ```rust
+            Ok(Some(Method(FunctionId(0), StaticMethod)))
             trait T { /* … */ }
             ```
         "#]],
@@ -7172,6 +7175,7 @@ impl T$0 for () {}
             ```
 
             ```rust
+            Ok(Some(Method(FunctionId(0), StaticMethod)))
             trait T {
                 fn func();
                 const FLAG: i32;
@@ -7199,6 +7203,7 @@ impl T$0 for () {}
             ```
 
             ```rust
+            Ok(Some(Method(FunctionId(0), StaticMethod)))
             trait T {
                 fn func();
                 const FLAG: i32;
@@ -7226,6 +7231,7 @@ impl T$0 for () {}
             ```
 
             ```rust
+            Ok(Some(Method(FunctionId(0), StaticMethod)))
             trait T {
                 fn func();
                 const FLAG: i32;
