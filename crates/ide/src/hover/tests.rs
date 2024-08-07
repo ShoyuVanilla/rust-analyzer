@@ -8656,3 +8656,55 @@ trait Foo$0<T, U> {
         "#]],
     );
 }
+
+#[test]
+fn debug_object_safety_3() {
+    check(
+        r#"
+//- minicore: sized
+trait Foo$0: Sized {}
+"#,
+        expect![[r#"
+            *Foo*
+
+            ```rust
+            test
+            ```
+
+            ```rust
+            Ok(Some(SizedSelf))
+            trait Foo
+            where
+                Self: Sized,
+            ```
+        "#]],
+    );
+}
+
+#[test]
+fn debug_object_safety_4() {
+    check(
+        r#"
+//- minicore: sized
+trait Foo$0
+where
+Self: Sized
+{
+}
+"#,
+        expect![[r#"
+            *Foo*
+
+            ```rust
+            test
+            ```
+
+            ```rust
+            Ok(Some(SizedSelf))
+            trait Foo
+            where
+                Self: Sized,
+            ```
+        "#]],
+    );
+}

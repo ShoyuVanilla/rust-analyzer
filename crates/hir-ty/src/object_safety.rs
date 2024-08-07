@@ -1,3 +1,5 @@
+//! Compute the object-safety of a trait
+
 use chalk_ir::{DebruijnIndex, WhereClause};
 use hir_def::{
     lang_item::LangItem, AssocItemId, ConstId, FunctionId, GenericDefId, HasModule, TraitId,
@@ -5,9 +7,10 @@ use hir_def::{
 };
 
 use crate::{
-    all_super_traits, db::HirDatabase, generics::generics, layout::LayoutError,
-    lower::callable_item_sig, make_single_type_binders, static_lifetime, wrap_empty_binders, DynTy,
-    Interner, QuantifiedWhereClauses, Substitution, TyBuilder, TyKind,
+    all_super_traits, db::HirDatabase, from_chalk_trait_id, generics::generics,
+    layout::LayoutError, lower::callable_item_sig, make_single_type_binders, static_lifetime,
+    utils::elaborate_clause_supertraits, wrap_empty_binders, DynTy, Interner,
+    QuantifiedWhereClauses, Substitution, TyBuilder, TyKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,14 +82,27 @@ pub fn object_safety_of_trait_query(
 
 fn generics_require_sized_self(db: &dyn HirDatabase, def: GenericDefId) -> bool {
     let krate = def.module(db.upcast()).krate();
-    let Some(_sized) = db.lang_item(krate, LangItem::Sized).and_then(|l| l.as_trait()) else {
+    let Some(sized) = db.lang_item(krate, LangItem::Sized).and_then(|l| l.as_trait()) else {
         return false;
     };
 
-    let _predicates = db.generic_predicates(def);
-    // TODO: elaborate with `utils::elaborate_clause_supertraits` and check `Self: Sized`
-
-    false
+    let predicates = &*db.generic_predicates(def);
+    let predicates = predicates.iter().map(|p| p.skip_binders().skip_binders().clone());
+    elaborate_clause_supertraits(db, predicates).any(|pred| match pred {
+        WhereClause::Implemented(trait_ref) => {
+            if from_chalk_trait_id(trait_ref.trait_id) == sized {
+                if let TyKind::BoundVar(it) =
+                    *trait_ref.self_type_parameter(Interner).kind(Interner)
+                {
+                    // Since `generic_predicates` is `Binder<Binder<..>>`, the `DebrujinIndex` of
+                    // self-parameter is `1`
+                    return it.index_if_bound_at(DebruijnIndex::new(1)).is_some_and(|i| i == 0);
+                }
+            }
+            false
+        }
+        _ => false,
+    })
 }
 
 fn object_safety_violation_for_assoc_item(
