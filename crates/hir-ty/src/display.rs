@@ -11,9 +11,20 @@ use base_db::CrateId;
 use chalk_ir::{BoundVar, Safety, TyKind};
 use either::Either;
 use hir_def::{
-    data::adt::VariantData, db::DefDatabase, find_path::{self, PrefixKind}, generics::{TypeOrConstParamData, TypeParamProvenance}, item_scope::ItemInNs, lang_item::{LangItem, LangItemTarget}, nameres::DefMap, path::{Path, PathKind}, type_ref::{
+    data::adt::VariantData,
+    db::DefDatabase,
+    find_path::{self, PrefixKind},
+    generics::{TypeOrConstParamData, TypeParamProvenance},
+    item_scope::ItemInNs,
+    lang_item::{LangItem, LangItemTarget},
+    nameres::DefMap,
+    path::{Path, PathKind},
+    type_ref::{
         TraitBoundModifier, TypeBound, TypeRef, TypeRefId, TypesMap, TypesSourceMap, UseArgRef,
-    }, visibility::Visibility, ClosureLoc, GenericDefId, HasModule, ImportPathConfig, ItemContainerId, LocalFieldId, Lookup, ModuleDefId, ModuleId, OpaqueTyLoc, TraitId
+    },
+    visibility::Visibility,
+    ClosureLoc, GenericDefId, HasModule, ImportPathConfig, ItemContainerId, LocalFieldId, Lookup,
+    ModuleDefId, ModuleId, OpaqueTyLoc, TraitId,
 };
 use hir_expand::name::Name;
 use intern::{sym, Internable, Interned};
@@ -41,8 +52,8 @@ use crate::{
     primitive, to_assoc_type_id,
     utils::{self, detect_variant_from_bytes, ClosureSubst},
     AdtId, AliasEq, AliasTy, Binders, CallableDefId, CallableSig, ConcreteConst, Const,
-    ConstScalar, ConstValue, DomainGoal, FnAbi, GenericArg, Interner, Lifetime,
-    LifetimeData, LifetimeOutlives, MemoryMap, Mutability, OpaqueTy, ProjectionTy, ProjectionTyExt,
+    ConstScalar, ConstValue, DomainGoal, FnAbi, GenericArg, Interner, Lifetime, LifetimeData,
+    LifetimeOutlives, MemoryMap, Mutability, OpaqueTy, ProjectionTy, ProjectionTyExt,
     QuantifiedWhereClause, Scalar, Substitution, TraitEnvironment, TraitRef, TraitRefExt, Ty,
     TyExt, WhereClause,
 };
@@ -1024,7 +1035,8 @@ impl HirDisplay for Ty {
                         substitution: parameters,
                     }))
                     | TyKind::OpaqueType(opaque_ty_id, parameters) => {
-                        let impl_trait_id = db.lookup_intern_opaque_ty(from_opaque_ty_id(*opaque_ty_id));
+                        let impl_trait_id =
+                            db.lookup_intern_opaque_ty(from_opaque_ty_id(*opaque_ty_id));
                         if let OpaqueTyLoc::ReturnTypeImplTrait(func, idx) = impl_trait_id {
                             let idx = Idx::from_raw(idx);
                             let datas = db
@@ -1463,7 +1475,8 @@ impl HirDisplay for Ty {
                         DisplaySourceCodeError::OpaqueType,
                     ));
                 }
-                let impl_trait_id = db.lookup_intern_opaque_ty(from_opaque_ty_id(opaque_ty.opaque_ty_id));
+                let impl_trait_id =
+                    db.lookup_intern_opaque_ty(from_opaque_ty_id(opaque_ty.opaque_ty_id));
                 match impl_trait_id {
                     OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
                         let idx = Idx::from_raw(idx);

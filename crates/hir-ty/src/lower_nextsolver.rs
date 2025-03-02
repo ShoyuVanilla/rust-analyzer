@@ -262,10 +262,8 @@ impl<'a> TyLoweringContext<'a> {
             TypeRef::Reference(ref_) => {
                 let inner_ty = self.lower_ty(ref_.ty);
                 // FIXME: It should infer the eldided lifetimes instead of stubbing with error
-                let lifetime = ref_
-                    .lifetime
-                    .as_ref()
-                    .map_or_else(Region::error, |lr| self.lower_lifetime(lr));
+                let lifetime =
+                    ref_.lifetime.as_ref().map_or_else(Region::error, |lr| self.lower_lifetime(lr));
                 Ty::new_ref(DbInterner, lifetime, inner_ty, lower_mutability(ref_.mutability))
             }
             TypeRef::Placeholder => Ty::new_error(DbInterner, ErrorGuaranteed),
@@ -709,12 +707,8 @@ impl<'a> TyLoweringContext<'a> {
                 // generic params. It's inefficient to splice the `Substitution`s, so we may want
                 // that method to optionally take parent `Substitution` as we already know them at
                 // this point (`t.substitution`).
-                let substs = self.substs_from_path_segment(
-                    segment,
-                    Some(associated_ty.into()),
-                    false,
-                    None,
-                );
+                let substs =
+                    self.substs_from_path_segment(segment, Some(associated_ty.into()), false, None);
 
                 let len_self =
                     crate::generics::generics(self.db.upcast(), associated_ty.into()).len_self();

@@ -2,8 +2,8 @@ use ena::undo_log::UndoLogs;
 use rustc_type_ir::UniverseIndex;
 use tracing::{debug, instrument};
 
-use super::InferCtxt;
 use super::region_constraints::RegionSnapshot;
+use super::InferCtxt;
 
 pub(crate) mod fudge;
 pub(crate) mod undo_log;

@@ -10,7 +10,8 @@ use test_fixture::WithFixture;
 use test_utils::skip_slow_tests;
 
 use crate::{
-    consteval::try_const_usize, db::HirDatabase, mir::pad16, test_db::TestDB, tests::setup_tracing, Const, ConstScalar, Interner, MemoryMap
+    consteval::try_const_usize, db::HirDatabase, mir::pad16, test_db::TestDB, tests::setup_tracing,
+    Const, ConstScalar, Interner, MemoryMap,
 };
 
 use super::{

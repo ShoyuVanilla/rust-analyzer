@@ -1,10 +1,20 @@
 use hir_def::GenericDefId;
-use rustc_type_ir::{fold::TypeFoldable, inherent::{Const as _, Span  as _, Ty as _}, relate::combine::PredicateEmittingRelation, ConstVid, FloatVid, IntVid, RegionVid, TyVid, TypingMode, UniverseIndex};
+use rustc_type_ir::{
+    fold::TypeFoldable,
+    inherent::{Const as _, Span as _, Ty as _},
+    relate::combine::PredicateEmittingRelation,
+    ConstVid, FloatVid, IntVid, RegionVid, TyVid, TypingMode, UniverseIndex,
+};
 
-use crate::next_solver::{Binder, Const, DbInterner, DbIr, ErrorGuaranteed, GenericArgs, ParamEnv, Region, Span, Ty};
+use crate::next_solver::{
+    Binder, Const, DbInterner, DbIr, ErrorGuaranteed, GenericArgs, ParamEnv, Region, Span, Ty,
+};
 
 ///! Definition of `InferCtxtLike` from the librarified type layer.
-use super::{relate::RelateResult, traits::ObligationCause, BoundRegionConversionTime, InferCtxt, SubregionOrigin};
+use super::{
+    relate::RelateResult, traits::ObligationCause, BoundRegionConversionTime, InferCtxt,
+    SubregionOrigin,
+};
 
 impl<'db> rustc_type_ir::InferCtxtLike for InferCtxt<'db> {
     type Interner = DbInterner;
@@ -18,10 +28,7 @@ impl<'db> rustc_type_ir::InferCtxtLike for InferCtxt<'db> {
         true
     }
 
-    fn typing_mode(
-        &self,
-        param_env_for_debug_assertion: &ParamEnv,
-    ) -> TypingMode<DbInterner> {
+    fn typing_mode(&self, param_env_for_debug_assertion: &ParamEnv) -> TypingMode<DbInterner> {
         self.typing_mode(param_env_for_debug_assertion)
     }
 

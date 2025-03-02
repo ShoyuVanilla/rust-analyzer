@@ -2,13 +2,21 @@
 //!
 //! [rustc-dev-guide]: https://rustc-dev-guide.rust-lang.org/traits/resolution.html
 
-use std::{cmp, hash::{Hash, Hasher}};
+use std::{
+    cmp,
+    hash::{Hash, Hasher},
+};
 
 use hir_def::GenericDefId;
-use rustc_type_ir::{solve::{Certainty, NoSolution}, PredicatePolarity, Upcast};
+use rustc_type_ir::{
+    solve::{Certainty, NoSolution},
+    PredicatePolarity, Upcast,
+};
 use stdx::thin_vec::ThinVec;
 
-use crate::next_solver::{Binder, DbInterner, Goal, ParamEnv, PolyTraitPredicate, Predicate, Span, TraitPredicate, Ty};
+use crate::next_solver::{
+    Binder, DbInterner, Goal, ParamEnv, PolyTraitPredicate, Predicate, Span, TraitPredicate, Ty,
+};
 
 use super::InferCtxt;
 
@@ -33,13 +41,9 @@ pub struct ObligationCause {
     pub body_id: Option<GenericDefId>,
 }
 
-
 impl ObligationCause {
     #[inline]
-    pub fn new(
-        span: Span,
-        body_id: GenericDefId,
-    ) -> ObligationCause {
+    pub fn new(span: Span, body_id: GenericDefId) -> ObligationCause {
         ObligationCause { span, body_id: Some(body_id) }
     }
 
@@ -165,12 +169,14 @@ impl<O> Obligation<O> {
         Obligation::new(tcx, ObligationCause::new(span, body_id), param_env, trait_ref)
     }
 
-    pub fn with<P>(
-        &self,
-        tcx: DbInterner,
-        value: impl Upcast<DbInterner, P>,
-    ) -> Obligation<P> {
-        Obligation::with_depth(tcx, self.cause.clone(), self.recursion_depth, self.param_env.clone(), value)
+    pub fn with<P>(&self, tcx: DbInterner, value: impl Upcast<DbInterner, P>) -> Obligation<P> {
+        Obligation::with_depth(
+            tcx,
+            self.cause.clone(),
+            self.recursion_depth,
+            self.param_env.clone(),
+            value,
+        )
     }
 }
 

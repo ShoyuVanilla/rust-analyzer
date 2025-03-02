@@ -9,10 +9,15 @@ use chalk_ir::{
 };
 use either::Either;
 use hir_def::{
-    data::adt::VariantData, hir::{
+    data::adt::VariantData,
+    hir::{
         Array, AsmOperand, BinaryOp, BindingId, CaptureBy, Expr, ExprId, ExprOrPatId, Pat, PatId,
         Statement, UnaryOp,
-    }, lang_item::LangItem, path::Path, resolver::ValueNs, ClosureId, ClosureLoc, DefWithBodyId, FieldId, HasModule, TupleFieldId, TupleId, VariantId
+    },
+    lang_item::LangItem,
+    path::Path,
+    resolver::ValueNs,
+    ClosureId, ClosureLoc, DefWithBodyId, FieldId, HasModule, TupleFieldId, TupleId, VariantId,
 };
 use hir_expand::name::Name;
 use intern::sym;
@@ -22,7 +27,19 @@ use stdx::{format_to, never};
 use syntax::utils::is_raw_identifier;
 
 use crate::{
-    db::HirDatabase, error_lifetime, from_chalk_trait_id, from_placeholder_idx, generics::Generics, infer::coerce::CoerceNever, make_binders, mapping::from_chalk_closure_id, mir::{BorrowKind, MirSpan, MutBorrowKind, ProjectionElem}, to_chalk_trait_id, traits::FnTrait, utils::{self, elaborate_clause_supertraits}, Adjust, Adjustment, AliasEq, AliasTy, Binders, BindingMode, ChalkTraitId, DynTy, DynTyExt, FnAbi, FnPointer, FnSig, Interner, OpaqueTy, ProjectionTyExt, Substitution, Ty, TyExt, WhereClause
+    db::HirDatabase,
+    error_lifetime, from_chalk_trait_id, from_placeholder_idx,
+    generics::Generics,
+    infer::coerce::CoerceNever,
+    make_binders,
+    mapping::from_chalk_closure_id,
+    mir::{BorrowKind, MirSpan, MutBorrowKind, ProjectionElem},
+    to_chalk_trait_id,
+    traits::FnTrait,
+    utils::{self, elaborate_clause_supertraits},
+    Adjust, Adjustment, AliasEq, AliasTy, Binders, BindingMode, ChalkTraitId, DynTy, DynTyExt,
+    FnAbi, FnPointer, FnSig, Interner, OpaqueTy, ProjectionTyExt, Substitution, Ty, TyExt,
+    WhereClause,
 };
 
 use super::{Expectation, InferenceContext};
@@ -1009,7 +1026,12 @@ impl InferenceContext<'_> {
             // FIXME: We handle closure as a special case, since chalk consider every closure as copy. We
             // should probably let chalk know which closures are copy, but I don't know how doing it
             // without creating query cycles.
-            return self.result.closure_info.get(&from_chalk_closure_id(*id)).map(|it| it.1 == FnTrait::Fn).unwrap_or(true);
+            return self
+                .result
+                .closure_info
+                .get(&from_chalk_closure_id(*id))
+                .map(|it| it.1 == FnTrait::Fn)
+                .unwrap_or(true);
         }
         self.table.resolve_completely(ty).is_copy(self.db, self.owner)
     }

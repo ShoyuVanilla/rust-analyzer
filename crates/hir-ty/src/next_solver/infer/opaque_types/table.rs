@@ -2,7 +2,10 @@ use ena::undo_log::UndoLogs;
 use tracing::instrument;
 
 use super::{OpaqueHiddenType, OpaqueTypeDecl, OpaqueTypeMap};
-use crate::next_solver::{infer::snapshot::undo_log::{InferCtxtUndoLogs, UndoLog}, OpaqueTypeKey, Ty};
+use crate::next_solver::{
+    infer::snapshot::undo_log::{InferCtxtUndoLogs, UndoLog},
+    OpaqueTypeKey, Ty,
+};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct OpaqueTypeStorage {
@@ -21,7 +24,9 @@ impl OpaqueTypeStorage {
         } else {
             // FIXME(#120456) - is `swap_remove` correct?
             match self.opaque_types.swap_remove(&key) {
-                None => panic!("reverted opaque type inference that was never registered: {:?}", key),
+                None => {
+                    panic!("reverted opaque type inference that was never registered: {:?}", key)
+                }
                 Some(_) => {}
             }
         }

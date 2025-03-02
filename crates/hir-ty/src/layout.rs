@@ -9,7 +9,8 @@ use hir_def::{
         BackendRepr, FieldsShape, Float, Integer, LayoutCalculator, LayoutCalculatorError,
         LayoutData, Primitive, ReprOptions, Scalar, Size, StructKind, TargetDataLayout,
         WrappingRange,
-    }, ClosureLoc, LocalFieldId, OpaqueTyLoc, StructId
+    },
+    ClosureLoc, LocalFieldId, OpaqueTyLoc, StructId,
 };
 use la_arena::{Idx, RawIdx};
 use rustc_abi::AddressSpace;
@@ -19,7 +20,13 @@ use rustc_index::{IndexSlice, IndexVec};
 use triomphe::Arc;
 
 use crate::{
-    consteval::try_const_usize, db::HirDatabase, infer::normalize, layout::adt::struct_variant_idx, mapping::{from_chalk_closure_id, from_opaque_ty_id}, utils::ClosureSubst, Interner, ProjectionTy, Substitution, TraitEnvironment, Ty
+    consteval::try_const_usize,
+    db::HirDatabase,
+    infer::normalize,
+    layout::adt::struct_variant_idx,
+    mapping::{from_chalk_closure_id, from_opaque_ty_id},
+    utils::ClosureSubst,
+    Interner, ProjectionTy, Substitution, TraitEnvironment, Ty,
 };
 
 pub use self::{
@@ -396,7 +403,8 @@ pub fn layout_of_ty_query(
             match impl_trait_id {
                 OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
                     let infer = db.infer(func.into());
-                    return db.layout_of_ty(infer.type_of_rpit[Idx::from_raw(idx)].clone(), trait_env);
+                    return db
+                        .layout_of_ty(infer.type_of_rpit[Idx::from_raw(idx)].clone(), trait_env);
                 }
                 OpaqueTyLoc::TypeAliasImplTrait(..) => {
                     return Err(LayoutError::NotImplemented);

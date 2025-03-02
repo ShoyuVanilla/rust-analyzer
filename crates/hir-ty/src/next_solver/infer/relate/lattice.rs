@@ -17,13 +17,27 @@
 //!
 //! [lattices]: https://en.wikipedia.org/wiki/Lattice_(order)
 
-use rustc_type_ir::{inherent::{DefId, IntoKind}, relate::{combine::{super_combine_consts, super_combine_tys}, Relate, TypeRelation, VarianceDiagInfo}, AliasRelationDirection, AliasTyKind, InferCtxtLike, InferTy, Upcast, Variance};
 use rustc_type_ir::visit::TypeVisitableExt;
+use rustc_type_ir::{
+    inherent::{DefId, IntoKind},
+    relate::{
+        combine::{super_combine_consts, super_combine_tys},
+        Relate, TypeRelation, VarianceDiagInfo,
+    },
+    AliasRelationDirection, AliasTyKind, InferCtxtLike, InferTy, Upcast, Variance,
+};
 use tracing::{debug, instrument};
 
-use super::{RelateResult, StructurallyRelateAliases};
 use super::combine::PredicateEmittingRelation;
-use crate::next_solver::{infer::{traits::{Obligation, PredicateObligations}, DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace}, AliasTy, Binder, Const, DbInterner, DbIr, Goal, ParamEnv, Predicate, PredicateKind, Region, Span, Ty, TyKind};
+use super::{RelateResult, StructurallyRelateAliases};
+use crate::next_solver::{
+    infer::{
+        traits::{Obligation, PredicateObligations},
+        DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace,
+    },
+    AliasTy, Binder, Const, DbInterner, DbIr, Goal, ParamEnv, Predicate, PredicateKind, Region,
+    Span, Ty, TyKind,
+};
 
 #[derive(Clone, Copy)]
 pub(crate) enum LatticeOpKind {
@@ -154,11 +168,7 @@ impl<'db> TypeRelation for LatticeOp<'_, 'db> {
     }
 
     #[instrument(skip(self), level = "trace")]
-    fn regions(
-        &mut self,
-        a: Region,
-        b: Region,
-    ) -> RelateResult<Region> {
+    fn regions(&mut self, a: Region, b: Region) -> RelateResult<Region> {
         let origin = SubregionOrigin::Subtype(Box::new(self.trace.clone()));
         let mut inner = self.infcx.inner.borrow_mut();
         let mut constraints = inner.unwrap_region_constraints();
@@ -172,19 +182,11 @@ impl<'db> TypeRelation for LatticeOp<'_, 'db> {
     }
 
     #[instrument(skip(self), level = "trace")]
-    fn consts(
-        &mut self,
-        a: Const,
-        b: Const,
-    ) -> RelateResult<Const> {
+    fn consts(&mut self, a: Const, b: Const) -> RelateResult<Const> {
         super_combine_consts(self.infcx, self, a, b)
     }
 
-    fn binders<T>(
-        &mut self,
-        a: Binder<T>,
-        b: Binder<T>,
-    ) -> RelateResult<Binder<T>>
+    fn binders<T>(&mut self, a: Binder<T>, b: Binder<T>) -> RelateResult<Binder<T>>
     where
         T: Relate<DbInterner>,
     {
@@ -224,11 +226,15 @@ impl LatticeOp<'_, '_> {
         let at = self.infcx.at(&self.trace.cause, self.param_env.clone());
         match self.kind {
             LatticeOpKind::Glb => {
-                self.obligations.extend(at.clone().sub(DefineOpaqueTypes::Yes, v.clone(), a)?.into_obligations());
+                self.obligations.extend(
+                    at.clone().sub(DefineOpaqueTypes::Yes, v.clone(), a)?.into_obligations(),
+                );
                 self.obligations.extend(at.sub(DefineOpaqueTypes::Yes, v, b)?.into_obligations());
             }
             LatticeOpKind::Lub => {
-                self.obligations.extend(at.clone().sub(DefineOpaqueTypes::Yes, a, v.clone())?.into_obligations());
+                self.obligations.extend(
+                    at.clone().sub(DefineOpaqueTypes::Yes, a, v.clone())?.into_obligations(),
+                );
                 self.obligations.extend(at.sub(DefineOpaqueTypes::Yes, b, v)?.into_obligations());
             }
         }
@@ -260,12 +266,7 @@ impl<'db> PredicateEmittingRelation<InferCtxt<'db>> for LatticeOp<'_, 'db> {
 
     fn register_goals(&mut self, goals: impl IntoIterator<Item = Goal<Predicate>>) {
         self.obligations.extend(goals.into_iter().map(|goal| {
-            Obligation::new(
-                DbInterner,
-                self.trace.cause.clone(),
-                goal.param_env,
-                goal.predicate,
-            )
+            Obligation::new(DbInterner, self.trace.cause.clone(), goal.param_env, goal.predicate)
         }))
     }
 

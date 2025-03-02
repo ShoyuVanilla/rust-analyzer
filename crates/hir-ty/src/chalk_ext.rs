@@ -4,12 +4,26 @@ use chalk_ir::{
     cast::Cast, FloatTy, IntTy, Mutability, Scalar, TyVariableKind, TypeOutlives, UintTy,
 };
 use hir_def::{
-    builtin_type::{BuiltinFloat, BuiltinInt, BuiltinType, BuiltinUint}, generics::TypeOrConstParamData, lang_item::LangItem, type_ref::Rawness, ClosureId, DefWithBodyId, FunctionId, GenericDefId, HasModule, ItemContainerId, Lookup, OpaqueTyLoc, TraitId
+    builtin_type::{BuiltinFloat, BuiltinInt, BuiltinType, BuiltinUint},
+    generics::TypeOrConstParamData,
+    lang_item::LangItem,
+    type_ref::Rawness,
+    ClosureId, DefWithBodyId, FunctionId, GenericDefId, HasModule, ItemContainerId, Lookup,
+    OpaqueTyLoc, TraitId,
 };
 use la_arena::Idx;
 
 use crate::{
-    db::HirDatabase, from_assoc_type_id, from_chalk_trait_id, from_foreign_def_id, from_placeholder_idx, generics::generics, mapping::{from_chalk_closure_id, from_opaque_ty_id}, to_chalk_trait_id, traits::next_trait_solve, utils::ClosureSubst, AdtId, AliasEq, AliasTy, Binders, CallableDefId, CallableSig, Canonical, CanonicalVarKinds, DynTy, FnPointer, InEnvironment, Interner, Lifetime, ProjectionTy, QuantifiedWhereClause, Substitution, TraitRef, Ty, TyBuilder, TyKind, TypeFlags, WhereClause
+    db::HirDatabase,
+    from_assoc_type_id, from_chalk_trait_id, from_foreign_def_id, from_placeholder_idx,
+    generics::generics,
+    mapping::{from_chalk_closure_id, from_opaque_ty_id},
+    to_chalk_trait_id,
+    traits::next_trait_solve,
+    utils::ClosureSubst,
+    AdtId, AliasEq, AliasTy, Binders, CallableDefId, CallableSig, Canonical, CanonicalVarKinds,
+    DynTy, FnPointer, InEnvironment, Interner, Lifetime, ProjectionTy, QuantifiedWhereClause,
+    Substitution, TraitRef, Ty, TyBuilder, TyKind, TypeFlags, WhereClause,
 };
 
 pub trait TyExt {
@@ -281,27 +295,27 @@ impl TyExt for Ty {
                 }
             }
             TyKind::Alias(AliasTy::Opaque(opaque_ty)) => {
-                let predicates = match db.lookup_intern_opaque_ty(from_opaque_ty_id(opaque_ty.opaque_ty_id))
-                {
-                    OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
-                        let idx = Idx::from_raw(idx);
-                        db.return_type_impl_traits(func).map(|it| {
-                            let data =
-                                (*it).as_ref().map(|rpit| rpit.impl_traits[idx].bounds.clone());
-                            data.substitute(Interner, &opaque_ty.substitution)
-                        })
-                    }
-                    OpaqueTyLoc::TypeAliasImplTrait(alias, idx) => {
-                        let idx = Idx::from_raw(idx);
-                        db.type_alias_impl_traits(alias).map(|it| {
-                            let data =
-                                (*it).as_ref().map(|rpit| rpit.impl_traits[idx].bounds.clone());
-                            data.substitute(Interner, &opaque_ty.substitution)
-                        })
-                    }
-                    // It always has an parameter for Future::Output type.
-                    OpaqueTyLoc::AsyncBlockTypeImplTrait(..) => unreachable!(),
-                };
+                let predicates =
+                    match db.lookup_intern_opaque_ty(from_opaque_ty_id(opaque_ty.opaque_ty_id)) {
+                        OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
+                            let idx = Idx::from_raw(idx);
+                            db.return_type_impl_traits(func).map(|it| {
+                                let data =
+                                    (*it).as_ref().map(|rpit| rpit.impl_traits[idx].bounds.clone());
+                                data.substitute(Interner, &opaque_ty.substitution)
+                            })
+                        }
+                        OpaqueTyLoc::TypeAliasImplTrait(alias, idx) => {
+                            let idx = Idx::from_raw(idx);
+                            db.type_alias_impl_traits(alias).map(|it| {
+                                let data =
+                                    (*it).as_ref().map(|rpit| rpit.impl_traits[idx].bounds.clone());
+                                data.substitute(Interner, &opaque_ty.substitution)
+                            })
+                        }
+                        // It always has an parameter for Future::Output type.
+                        OpaqueTyLoc::AsyncBlockTypeImplTrait(..) => unreachable!(),
+                    };
 
                 predicates.map(|it| it.into_value_and_skipped_binders().0)
             }

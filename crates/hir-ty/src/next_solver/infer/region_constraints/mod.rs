@@ -18,7 +18,9 @@ use super::unify_key::RegionVidKey;
 use super::{MemberConstraint, MiscVariable, RegionVariableOrigin, SubregionOrigin};
 use crate::next_solver::infer::snapshot::undo_log::{InferCtxtUndoLogs, Snapshot};
 use crate::next_solver::infer::unify_key::RegionVariableValue;
-use crate::next_solver::{AliasTy, Binder, DbInterner, DbIr, OpaqueTypeKey, ParamTy, PlaceholderTy, Region, Span, Ty};
+use crate::next_solver::{
+    AliasTy, Binder, DbInterner, DbIr, OpaqueTypeKey, ParamTy, PlaceholderTy, Region, Span, Ty,
+};
 
 #[derive(Clone, Default)]
 pub struct RegionConstraintStorage {
@@ -379,7 +381,8 @@ impl RegionConstraintCollector<'_> {
         universe: UniverseIndex,
         origin: RegionVariableOrigin,
     ) -> RegionVid {
-        let vid = self.storage.var_infos.push(RegionVariableInfo { origin: origin.clone(), universe });
+        let vid =
+            self.storage.var_infos.push(RegionVariableInfo { origin: origin.clone(), universe });
 
         let u_vid = self.unification_table_mut().new_key(RegionVariableValue::Unknown { universe });
         assert_eq!(vid, u_vid.vid);
@@ -418,12 +421,7 @@ impl RegionConstraintCollector<'_> {
         self.undo_log.push(AddVerify(index));
     }
 
-    pub(super) fn make_eqregion(
-        &mut self,
-        origin: SubregionOrigin,
-        a: Region,
-        b: Region,
-    ) {
+    pub(super) fn make_eqregion(&mut self, origin: SubregionOrigin, a: Region, b: Region) {
         if a != b {
             // Eventually, it would be nice to add direct support for
             // equating regions.
@@ -486,12 +484,7 @@ impl RegionConstraintCollector<'_> {
     }
 
     #[instrument(skip(self, origin), level = "debug")]
-    pub(super) fn make_subregion(
-        &mut self,
-        origin: SubregionOrigin,
-        sub: Region,
-        sup: Region,
-    ) {
+    pub(super) fn make_subregion(&mut self, origin: SubregionOrigin, sub: Region, sup: Region) {
         // cannot add constraints once regions are resolved
         debug!("origin = {:#?}", origin);
 
@@ -567,11 +560,7 @@ impl RegionConstraintCollector<'_> {
 
     /// Resolves a region var to its value in the unification table, if it exists.
     /// Otherwise, it is resolved to the root `ReVar` in the table.
-    pub fn opportunistic_resolve_var(
-        &mut self,
-        cx: DbIr<'_>,
-        vid: RegionVid,
-    ) -> Region {
+    pub fn opportunistic_resolve_var(&mut self, cx: DbIr<'_>, vid: RegionVid) -> Region {
         let mut ut = self.unification_table_mut();
         let root_vid = ut.find(vid).vid;
         match ut.probe_value(root_vid) {
@@ -580,10 +569,7 @@ impl RegionConstraintCollector<'_> {
         }
     }
 
-    pub fn probe_value(
-        &mut self,
-        vid: RegionVid,
-    ) -> Result<Region, UniverseIndex> {
+    pub fn probe_value(&mut self, vid: RegionVid) -> Result<Region, UniverseIndex> {
         match self.unification_table_mut().probe_value(vid) {
             RegionVariableValue::Known { value } => Ok(value),
             RegionVariableValue::Unknown { universe } => Err(universe),

@@ -6,7 +6,10 @@ use rustc_type_ir::error::TypeError;
 use rustc_type_ir::inherent::{Const as _, IntoKind, Ty as _};
 use rustc_type_ir::relate::VarianceDiagInfo;
 use rustc_type_ir::visit::{TypeVisitable, TypeVisitableExt};
-use rustc_type_ir::{AliasRelationDirection, AliasTyKind, ConstVid, InferConst, InferCtxtLike, InferTy, RegionKind, RustIr, TermKind, TyVid, UniverseIndex, Variance};
+use rustc_type_ir::{
+    AliasRelationDirection, AliasTyKind, ConstVid, InferConst, InferCtxtLike, InferTy, RegionKind,
+    RustIr, TermKind, TyVid, UniverseIndex, Variance,
+};
 use tracing::{debug, instrument, warn};
 
 use super::{
@@ -14,9 +17,12 @@ use super::{
 };
 use crate::next_solver::infer::type_variable::TypeVariableValue;
 use crate::next_solver::infer::unify_key::ConstVariableValue;
-use crate::next_solver::infer::{InferCtxt, RegionVariableOrigin, relate};
+use crate::next_solver::infer::{relate, InferCtxt, RegionVariableOrigin};
 use crate::next_solver::util::MaxUniverse;
-use crate::next_solver::{AliasTy, Binder, ClauseKind, Const, ConstKind, DbInterner, DbIr, GenericArgs, PredicateKind, ProjectionPredicate, Region, Span, Term, TermVid, Ty, TyKind, TypingMode, UnevaluatedConst};
+use crate::next_solver::{
+    AliasTy, Binder, ClauseKind, Const, ConstKind, DbInterner, DbIr, GenericArgs, PredicateKind,
+    ProjectionPredicate, Region, Span, Term, TermVid, Ty, TyKind, TypingMode, UnevaluatedConst,
+};
 
 impl<'db> InferCtxt<'db> {
     /// The idea is that we should ensure that the type variable `target_vid`
@@ -64,7 +70,10 @@ impl<'db> InferCtxt<'db> {
         if let TyKind::Infer(InferTy::TyVar(generalized_vid)) = generalized_ty.clone().kind() {
             self.inner.borrow_mut().type_variables().equate(target_vid, generalized_vid);
         } else {
-            self.inner.borrow_mut().type_variables().instantiate(target_vid, generalized_ty.clone());
+            self.inner
+                .borrow_mut()
+                .type_variables()
+                .instantiate(target_vid, generalized_ty.clone());
         }
 
         // See the comment on `Generalization::has_unconstrained_ty_var`.
@@ -228,9 +237,7 @@ impl<'db> InferCtxt<'db> {
             }
             TermVid::Const(ct_vid) => (
                 self.probe_const_var(ct_vid).unwrap_err(),
-                TermVid::Const(
-                    self.inner.borrow_mut().const_unification_table().find(ct_vid).vid,
-                ),
+                TermVid::Const(self.inner.borrow_mut().const_unification_table().find(ct_vid).vid),
             ),
         };
 
@@ -340,10 +347,7 @@ impl Generalizer<'_, '_> {
     ///   continue generalizing the alias. This ends up pulling down the universe of the
     ///   inference variable and is incomplete in case the alias would normalize to a type
     ///   which does not mention that inference variable.
-    fn generalize_alias_ty(
-        &mut self,
-        alias: AliasTy,
-    ) -> Result<Ty, TypeError<DbInterner>> {
+    fn generalize_alias_ty(&mut self, alias: AliasTy) -> Result<Ty, TypeError<DbInterner>> {
         // We do not eagerly replace aliases with inference variables if they have
         // escaping bound vars, see the method comment for details. However, when we
         // are inside of an alias with escaping bound vars replacing nested aliases
@@ -443,7 +447,9 @@ impl<'db> TypeRelation for Generalizer<'_, 'db> {
         // subtyping. This is basically our "occurs check", preventing
         // us from creating infinitely sized types.
         let g = match t.clone().kind() {
-            TyKind::Infer(InferTy::FreshTy(_) | InferTy::FreshIntTy(_) | InferTy::FreshFloatTy(_)) => {
+            TyKind::Infer(
+                InferTy::FreshTy(_) | InferTy::FreshIntTy(_) | InferTy::FreshFloatTy(_),
+            ) => {
                 panic!("unexpected infer type: {t:?}")
             }
 
@@ -537,7 +543,9 @@ impl<'db> TypeRelation for Generalizer<'_, 'db> {
 
             TyKind::Alias(_, data) => match self.structurally_relate_aliases {
                 StructurallyRelateAliases::No => self.generalize_alias_ty(data),
-                StructurallyRelateAliases::Yes => relate::structurally_relate_tys(self, t.clone(), t.clone()),
+                StructurallyRelateAliases::Yes => {
+                    relate::structurally_relate_tys(self, t.clone(), t.clone())
+                }
             },
 
             _ => relate::structurally_relate_tys(self, t.clone(), t.clone()),
@@ -548,11 +556,7 @@ impl<'db> TypeRelation for Generalizer<'_, 'db> {
     }
 
     #[instrument(level = "debug", skip(self, r2), ret)]
-    fn regions(
-        &mut self,
-        r: Region,
-        r2: Region,
-    ) -> RelateResult<Region> {
+    fn regions(&mut self, r: Region, r2: Region) -> RelateResult<Region> {
         assert_eq!(r, r2); // we are misusing TypeRelation here; both LHS and RHS ought to be ==
 
         match r.clone().kind() {
@@ -594,11 +598,7 @@ impl<'db> TypeRelation for Generalizer<'_, 'db> {
     }
 
     #[instrument(level = "debug", skip(self, c2), ret)]
-    fn consts(
-        &mut self,
-        c: Const,
-        c2: Const,
-    ) -> RelateResult<Const> {
+    fn consts(&mut self, c: Const, c2: Const) -> RelateResult<Const> {
         assert_eq!(c, c2); // we are misusing TypeRelation here; both LHS and RHS ought to be ==
 
         match c.clone().kind() {
@@ -677,11 +677,7 @@ impl<'db> TypeRelation for Generalizer<'_, 'db> {
     }
 
     #[instrument(level = "debug", skip(self), ret)]
-    fn binders<T>(
-        &mut self,
-        a: Binder<T>,
-        _: Binder<T>,
-    ) -> RelateResult<Binder<T>>
+    fn binders<T>(&mut self, a: Binder<T>, _: Binder<T>) -> RelateResult<Binder<T>>
     where
         T: Relate<DbInterner>,
     {

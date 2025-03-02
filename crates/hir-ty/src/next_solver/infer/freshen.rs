@@ -34,7 +34,12 @@
 use std::collections::hash_map::Entry;
 
 use rustc_hash::FxHashMap;
-use rustc_type_ir::{fold::{TypeFoldable, TypeFolder, TypeSuperFoldable}, inherent::{Const as _, IntoKind}, visit::TypeVisitableExt, ConstKind, FloatVarValue, InferConst, InferTy, IntVarValue, RegionKind, TyKind};
+use rustc_type_ir::{
+    fold::{TypeFoldable, TypeFolder, TypeSuperFoldable},
+    inherent::{Const as _, IntoKind},
+    visit::TypeVisitableExt,
+    ConstKind, FloatVarValue, InferConst, InferTy, IntVarValue, RegionKind, TyKind,
+};
 
 use crate::next_solver::{Const, DbInterner, Region, Ty};
 
@@ -78,11 +83,7 @@ impl<'a, 'db> TypeFreshener<'a, 'db> {
         }
     }
 
-    fn freshen_const<F>(
-        &mut self,
-        input: Result<Const, InferConst>,
-        freshener: F,
-    ) -> Const
+    fn freshen_const<F>(&mut self, input: Result<Const, InferConst>, freshener: F) -> Const
     where
         F: FnOnce(u32) -> InferConst,
     {
@@ -158,8 +159,7 @@ impl TypeFolder<DbInterner> for TypeFreshener<'_, '_> {
                     panic!(
                         "Encountered a freshend const with id {} \
                             but our counter is only at {}",
-                        i,
-                        self.const_freshen_count,
+                        i, self.const_freshen_count,
                     );
                 }
                 ct
@@ -226,8 +226,7 @@ impl TypeFreshener<'_, '_> {
                     panic!(
                         "Encountered a freshend type with id {} \
                           but our counter is only at {}",
-                        ct,
-                        self.ty_freshen_count
+                        ct, self.ty_freshen_count
                     );
                 }
                 None

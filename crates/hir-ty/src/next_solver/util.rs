@@ -8,13 +8,25 @@ use rustc_abi::{Float, HasDataLayout, Integer, IntegerType, Primitive, ReprOptio
 use rustc_type_ir::data_structures::IndexMap;
 use rustc_type_ir::fold::TypeFoldable;
 use rustc_type_ir::inherent::{GenericArg as _, IrAdtDef, SliceLike};
+use rustc_type_ir::{
+    fold::{TypeFolder, TypeSuperFoldable},
+    inherent::IntoKind,
+    visit::{TypeSuperVisitable, TypeVisitor},
+    ConstKind, CoroutineArgs, FloatTy, IntTy, RegionKind, UintTy, UniverseIndex,
+};
 use rustc_type_ir::{BoundVar, Canonical, DebruijnIndex, EarlyBinder, GenericArgKind};
-use rustc_type_ir::{fold::{TypeFolder, TypeSuperFoldable}, inherent::IntoKind, visit::{TypeSuperVisitable, TypeVisitor}, ConstKind, CoroutineArgs, FloatTy, IntTy, RegionKind, UintTy, UniverseIndex};
 
-use crate::{db::HirDatabase, from_foreign_def_id, method_resolution::{TraitImpls, TyFingerprint}};
+use crate::{
+    db::HirDatabase,
+    from_foreign_def_id,
+    method_resolution::{TraitImpls, TyFingerprint},
+};
 
 use super::fold::{BoundVarReplacer, FnMutDelegate};
-use super::{Binder, BoundRegion, BoundTy, CanonicalVarInfo, CanonicalVars, Clause, Const, DbInterner, DbIr, GenericArg, GenericArgs, Region, Ty, TyKind};
+use super::{
+    Binder, BoundRegion, BoundTy, CanonicalVarInfo, CanonicalVars, Clause, Const, DbInterner, DbIr,
+    GenericArg, GenericArgs, Region, Ty, TyKind,
+};
 
 #[derive(Clone, Debug)]
 pub struct Discr {
@@ -241,7 +253,6 @@ impl CoroutineArgs<DbInterner> {
     }
 }
 
-
 /// Finds the max universe present
 pub struct MaxUniverse {
     max_universe: UniverseIndex,
@@ -374,8 +385,7 @@ pub(crate) fn for_trait_impls(
     for it in block_impls {
         f(&it)?;
     }
-    for it in def_blocks.into_iter().flatten().filter_map(|it| db.trait_impls_in_block(it))
-    {
+    for it in def_blocks.into_iter().flatten().filter_map(|it| db.trait_impls_in_block(it)) {
         f(&it)?;
     }
     ControlFlow::Continue(())
@@ -413,7 +423,9 @@ pub fn sized_constraint_for_ty(ir: DbIr<'_>, ty: Ty) -> Option<Ty> {
 
         // recursive case
         Adt(adt, args) => {
-            let tail_ty = EarlyBinder::bind(adt.all_field_tys(ir).skip_binder().into_iter().last()?).instantiate(DbInterner, args);
+            let tail_ty =
+                EarlyBinder::bind(adt.all_field_tys(ir).skip_binder().into_iter().last()?)
+                    .instantiate(DbInterner, args);
             sized_constraint_for_ty(ir, tail_ty)
         }
 
@@ -426,44 +438,50 @@ pub fn sized_constraint_for_ty(ir: DbIr<'_>, ty: Ty) -> Option<Ty> {
     }
 }
 
-pub fn apply_args_to_binder<T: TypeFoldable<DbInterner>>(b: Binder<T>, args: GenericArgs, db: &dyn HirDatabase) -> T {
+pub fn apply_args_to_binder<T: TypeFoldable<DbInterner>>(
+    b: Binder<T>,
+    args: GenericArgs,
+    db: &dyn HirDatabase,
+) -> T {
     // An Ir is needed for debug_asserting args compatible in Alias creation - it's just a noop for us so we can give fake data for CrateId and Block
-    let fake_ir = crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
-    let types = &mut |ty: BoundTy| { args.as_slice()[ty.var.index()].expect_ty() };
-    let regions = &mut |region: BoundRegion| { args.as_slice()[region.var.index()].expect_region() };
-    let consts = &mut |const_: BoundVar| { args.as_slice()[const_.index()].expect_const() };
-    let mut instantiate = BoundVarReplacer::new(DbInterner, FnMutDelegate {
-        types,
-        regions,
-        consts,
-    });
+    let fake_ir =
+        crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
+    let types = &mut |ty: BoundTy| args.as_slice()[ty.var.index()].expect_ty();
+    let regions = &mut |region: BoundRegion| args.as_slice()[region.var.index()].expect_region();
+    let consts = &mut |const_: BoundVar| args.as_slice()[const_.index()].expect_const();
+    let mut instantiate =
+        BoundVarReplacer::new(DbInterner, FnMutDelegate { types, regions, consts });
     b.skip_binder().fold_with(&mut instantiate)
 }
 
 pub fn mini_canonicalize<T: TypeFoldable<DbInterner>>(val: T) -> Canonical<DbInterner, T> {
-    let mut canon = MiniCanonicalizer {
-        db: DebruijnIndex::ZERO,
-        vars: IndexMap::default(),
-    };
+    let mut canon = MiniCanonicalizer { db: DebruijnIndex::ZERO, vars: IndexMap::default() };
     let canon_val = val.fold_with(&mut canon);
     Canonical {
         value: canon_val,
         max_universe: UniverseIndex::from_u32(1),
         variables: CanonicalVars::new_from_iter(canon.vars.iter().map(|(k, v)| {
             let kind = match k.clone().kind() {
-                GenericArgKind::Type(ty) => {
-                    match ty.kind() {
-                        TyKind::Int(..) | TyKind::Uint(..) => rustc_type_ir::CanonicalVarKind::Ty(rustc_type_ir::CanonicalTyVarKind::Int),
-                        TyKind::Float(..) => rustc_type_ir::CanonicalVarKind::Ty(rustc_type_ir::CanonicalTyVarKind::Float),
-                        _ => rustc_type_ir::CanonicalVarKind::Ty(rustc_type_ir::CanonicalTyVarKind::General(UniverseIndex::ZERO)),
+                GenericArgKind::Type(ty) => match ty.kind() {
+                    TyKind::Int(..) | TyKind::Uint(..) => {
+                        rustc_type_ir::CanonicalVarKind::Ty(rustc_type_ir::CanonicalTyVarKind::Int)
                     }
-                    
+                    TyKind::Float(..) => rustc_type_ir::CanonicalVarKind::Ty(
+                        rustc_type_ir::CanonicalTyVarKind::Float,
+                    ),
+                    _ => rustc_type_ir::CanonicalVarKind::Ty(
+                        rustc_type_ir::CanonicalTyVarKind::General(UniverseIndex::ZERO),
+                    ),
+                },
+                GenericArgKind::Lifetime(_) => {
+                    rustc_type_ir::CanonicalVarKind::Region(UniverseIndex::ZERO)
                 }
-                GenericArgKind::Lifetime(_) => rustc_type_ir::CanonicalVarKind::Region(UniverseIndex::ZERO),
-                GenericArgKind::Const(_) => rustc_type_ir::CanonicalVarKind::Const(UniverseIndex::ZERO),
+                GenericArgKind::Const(_) => {
+                    rustc_type_ir::CanonicalVarKind::Const(UniverseIndex::ZERO)
+                }
             };
             CanonicalVarInfo { kind }
-        }))
+        })),
     }
 }
 
@@ -473,11 +491,14 @@ struct MiniCanonicalizer {
 }
 
 impl TypeFolder<DbInterner> for MiniCanonicalizer {
-    fn cx(&self) -> DbInterner{
+    fn cx(&self) -> DbInterner {
         DbInterner
     }
 
-    fn fold_binder<T: TypeFoldable<DbInterner>>(&mut self, t: rustc_type_ir::Binder<DbInterner, T>) -> rustc_type_ir::Binder<DbInterner, T> {
+    fn fold_binder<T: TypeFoldable<DbInterner>>(
+        &mut self,
+        t: rustc_type_ir::Binder<DbInterner, T>,
+    ) -> rustc_type_ir::Binder<DbInterner, T> {
         self.db.shift_in(1);
         let res = t.map_bound(|t| t.fold_with(self));
         self.db.shift_out(1);
@@ -495,13 +516,19 @@ impl TypeFolder<DbInterner> for MiniCanonicalizer {
             rustc_type_ir::TyKind::Infer(infer) => {
                 let len = self.vars.len();
                 let var = *self.vars.entry(t.into()).or_insert(len);
-                Ty::new(TyKind::Bound(self.db, BoundTy { kind: super::BoundTyKind::Anon, var: BoundVar::from_usize(var) }))
+                Ty::new(TyKind::Bound(
+                    self.db,
+                    BoundTy { kind: super::BoundTyKind::Anon, var: BoundVar::from_usize(var) },
+                ))
             }
             _ => t.super_fold_with(self),
         }
     }
 
-    fn fold_region(&mut self, r: <DbInterner as rustc_type_ir::Interner>::Region) -> <DbInterner as rustc_type_ir::Interner>::Region {
+    fn fold_region(
+        &mut self,
+        r: <DbInterner as rustc_type_ir::Interner>::Region,
+    ) -> <DbInterner as rustc_type_ir::Interner>::Region {
         match r.clone().kind() {
             RegionKind::ReBound(db, _) => {
                 if db >= self.db {
@@ -512,13 +539,22 @@ impl TypeFolder<DbInterner> for MiniCanonicalizer {
             RegionKind::ReVar(vid) => {
                 let len = self.vars.len();
                 let var = *self.vars.entry(r.into()).or_insert(len);
-                Region::new(RegionKind::ReBound(self.db, BoundRegion { kind: super::BoundRegionKind::Anon, var: BoundVar::from_usize(len) }))
+                Region::new(RegionKind::ReBound(
+                    self.db,
+                    BoundRegion {
+                        kind: super::BoundRegionKind::Anon,
+                        var: BoundVar::from_usize(len),
+                    },
+                ))
             }
             _ => r,
         }
     }
 
-    fn fold_const(&mut self, c: <DbInterner as rustc_type_ir::Interner>::Const) -> <DbInterner as rustc_type_ir::Interner>::Const {
+    fn fold_const(
+        &mut self,
+        c: <DbInterner as rustc_type_ir::Interner>::Const,
+    ) -> <DbInterner as rustc_type_ir::Interner>::Const {
         match c.clone().kind() {
             ConstKind::Bound(db, _) => {
                 if db >= self.db {

@@ -1,14 +1,21 @@
 use hir_def::GenericDefId;
 use intern::{Interned, Symbol};
 use rustc_type_ir::{
-    fold::TypeFoldable, inherent::{GenericArg as _, GenericsOf, IntoKind, SliceLike, Ty as _}, relate::{Relate, VarianceDiagInfo}, visit::TypeVisitable, CollectAndApply, ConstVid, FnSig, FnSigTys, GenericArgKind, IntTy, Interner, RustIr, TermKind, TyKind, TyVid, Variance
+    fold::TypeFoldable,
+    inherent::{GenericArg as _, GenericsOf, IntoKind, SliceLike, Ty as _},
+    relate::{Relate, VarianceDiagInfo},
+    visit::TypeVisitable,
+    CollectAndApply, ConstVid, FnSig, FnSigTys, GenericArgKind, IntTy, Interner, RustIr, TermKind,
+    TyKind, TyVid, Variance,
 };
 use smallvec::SmallVec;
 
 use crate::interner::InternedWrapper;
 
 use super::{
-    generics::{GenericParamDef, GenericParamDefKind, Generics}, interned_vec, Const, DbInterner, DbIr, EarlyParamRegion, ErrorGuaranteed, ParamConst, Region, Ty, Tys
+    generics::{GenericParamDef, GenericParamDefKind, Generics},
+    interned_vec, Const, DbInterner, DbIr, EarlyParamRegion, ErrorGuaranteed, ParamConst, Region,
+    Ty, Tys,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -24,7 +31,7 @@ impl std::fmt::Debug for GenericArg {
             Self::Ty(t) => std::fmt::Debug::fmt(t, f),
             Self::Lifetime(r) => std::fmt::Debug::fmt(r, f),
             Self::Const(c) => std::fmt::Debug::fmt(c, f),
-        }   
+        }
     }
 }
 
@@ -39,7 +46,7 @@ impl std::fmt::Debug for Term {
         match self {
             Self::Ty(t) => std::fmt::Debug::fmt(t, f),
             Self::Const(c) => std::fmt::Debug::fmt(c, f),
-        }   
+        }
     }
 }
 
@@ -170,8 +177,12 @@ impl GenericArgs {
         }
     }
 
-    fn fill_single<F>(args: &mut SmallVec<[GenericArg; 8]>, defs: &Generics, start_idx: u32, mk_kind: &mut F)
-    where
+    fn fill_single<F>(
+        args: &mut SmallVec<[GenericArg; 8]>,
+        defs: &Generics,
+        start_idx: u32,
+        mk_kind: &mut F,
+    ) where
         F: FnMut(&Symbol, u32, GenericParamDefKind, &[GenericArg]) -> GenericArg,
     {
         args.reserve(defs.own_params.len());
@@ -210,7 +221,11 @@ impl rustc_type_ir::inherent::GenericArgs<DbInterner> for GenericArgs {
     }
 
     fn type_at(self, i: usize) -> <DbInterner as rustc_type_ir::Interner>::Ty {
-        self.0 .0.get(i).and_then(|g| g.as_type()).unwrap_or_else(|| Ty::new_error(DbInterner, ErrorGuaranteed))
+        self.0
+             .0
+            .get(i)
+            .and_then(|g| g.as_type())
+            .unwrap_or_else(|| Ty::new_error(DbInterner, ErrorGuaranteed))
     }
 
     fn region_at(self, i: usize) -> <DbInterner as rustc_type_ir::Interner>::Region {
@@ -223,17 +238,19 @@ impl rustc_type_ir::inherent::GenericArgs<DbInterner> for GenericArgs {
 
     fn split_closure_args(self) -> rustc_type_ir::ClosureArgsParts<DbInterner> {
         // FIXME: should use `ClosureSubst` when possible
-        match self.0.0.as_slice() {
+        match self.0 .0.as_slice() {
             [sig_ty, parent_args @ ..] => {
                 // This is stupid, but the next solver expects the first input to actually be a tuple
                 let sig_ty = match sig_ty.expect_ty().kind() {
-                    TyKind::FnPtr(sig_tys, header) => {
-                        Ty::new(TyKind::FnPtr(sig_tys.map_bound(|s| {
-                            let inputs = Ty::new_tup_from_iter(DbInterner, s.clone().inputs().iter());
+                    TyKind::FnPtr(sig_tys, header) => Ty::new(TyKind::FnPtr(
+                        sig_tys.map_bound(|s| {
+                            let inputs =
+                                Ty::new_tup_from_iter(DbInterner, s.clone().inputs().iter());
                             let output = s.output();
                             FnSigTys { inputs_and_output: Tys::new_from_iter([inputs, output]) }
-                        }), header))
-                    }
+                        }),
+                        header,
+                    )),
                     _ => todo!(),
                 };
                 rustc_type_ir::ClosureArgsParts {
@@ -243,7 +260,9 @@ impl rustc_type_ir::inherent::GenericArgs<DbInterner> for GenericArgs {
                     tupled_upvars_ty: Ty::new_unit(DbInterner),
                 }
             }
-            _ => { unreachable!("unexpected closure sig"); }
+            _ => {
+                unreachable!("unexpected closure sig");
+            }
         }
     }
 
@@ -284,15 +303,11 @@ impl rustc_type_ir::inherent::GenericArgs<DbInterner> for GenericArgs {
 pub fn mk_param(index: u32, name: &Symbol, kind: GenericParamDefKind) -> GenericArg {
     let name = name.clone();
     match kind {
-        GenericParamDefKind::Lifetime => Region::new_early_param(EarlyParamRegion {
-            index,
-            name,
-        })
-        .into(),
-        GenericParamDefKind::Type => Ty::new_param(index, name).into(),
-        GenericParamDefKind::Const => {
-            Const::new_param(ParamConst { index, name }).into()
+        GenericParamDefKind::Lifetime => {
+            Region::new_early_param(EarlyParamRegion { index, name }).into()
         }
+        GenericParamDefKind::Type => Ty::new_param(index, name).into(),
+        GenericParamDefKind::Const => Const::new_param(ParamConst { index, name }).into(),
     }
 }
 
@@ -407,7 +422,6 @@ impl Relate<DbInterner> for Term {
 
 impl rustc_type_ir::inherent::Term<DbInterner> for Term {}
 
-
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum TermVid {
     Ty(TyVid),
@@ -425,7 +439,6 @@ impl From<ConstVid> for TermVid {
         TermVid::Const(value)
     }
 }
-
 
 impl DbInterner {
     pub(super) fn mk_args(self, args: &[GenericArg]) -> GenericArgs {

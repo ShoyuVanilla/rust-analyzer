@@ -48,7 +48,6 @@ pub type PolyTraitRef = Binder<TraitRef>;
 pub type PolyExistentialTraitRef = Binder<ExistentialTraitRef>;
 pub type PolyExistentialProjection = Binder<ExistentialProjection>;
 
-
 /// Compares via an ordering that will not change if modules are reordered or other changes are
 /// made to the tree. In particular, this ordering is preserved across incremental compilations.
 fn stable_cmp_existential_predicate(
@@ -178,7 +177,7 @@ pub struct Predicate(Interned<InternedWrapper<WithCachedTypeInfo<Binder<Predicat
 impl std::fmt::Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Binder<")?;
-        match self.0.0.internee.clone().skip_binder() {
+        match self.0 .0.internee.clone().skip_binder() {
             rustc_type_ir::PredicateKind::Clause(clause_kind) => {
                 write!(f, "{:?}", clause_kind)
             }
@@ -200,7 +199,7 @@ impl std::fmt::Debug for Predicate {
                 write!(f, "{:?} {:?} {:?}", t1, dir, t2)
             }
         }?;
-        write!(f, ", [{:?}]>", self.0.0.internee.bound_vars())?;
+        write!(f, ", [{:?}]>", self.0 .0.internee.bound_vars())?;
         Ok(())
     }
 }

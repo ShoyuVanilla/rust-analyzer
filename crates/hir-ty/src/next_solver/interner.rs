@@ -1684,7 +1684,6 @@ impl RustIr for DbIr<'_> {
 
         let db = self.db;
 
-        
         impl_trait_query(db, impl_id)
             // ImplIds for impls where the trait ref can't be resolved should never reach trait solving
             .expect("invalid impl passed to trait solver")

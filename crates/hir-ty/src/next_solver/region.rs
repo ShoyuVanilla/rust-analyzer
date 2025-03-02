@@ -1,7 +1,11 @@
 use hir_def::GenericDefId;
 use intern::{Interned, Symbol};
 use rustc_type_ir::{
-    fold::TypeFoldable, inherent::{IntoKind, PlaceholderLike}, relate::Relate, visit::{Flags, TypeVisitable}, BoundVar, RegionVid, TypeFlags, INNERMOST
+    fold::TypeFoldable,
+    inherent::{IntoKind, PlaceholderLike},
+    relate::Relate,
+    visit::{Flags, TypeVisitable},
+    BoundVar, RegionVid, TypeFlags, INNERMOST,
 };
 
 use crate::interner::InternedWrapper;
@@ -34,11 +38,11 @@ impl Region {
     }
 
     pub fn is_placeholder(&self) -> bool {
-        matches!(self.0.0, RegionKind::RePlaceholder(..))
+        matches!(self.0 .0, RegionKind::RePlaceholder(..))
     }
 
     pub fn is_static(&self) -> bool {
-        matches!(self.0.0, RegionKind::ReStatic)
+        matches!(self.0 .0, RegionKind::ReStatic)
     }
 }
 

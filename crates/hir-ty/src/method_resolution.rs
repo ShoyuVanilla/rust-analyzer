@@ -22,7 +22,18 @@ use stdx::never;
 use triomphe::Arc;
 
 use crate::{
-    autoderef::{self, AutoderefKind}, db::HirDatabase, error_lifetime, from_chalk_trait_id, from_foreign_def_id, infer::{unify::InferenceTable, Adjust, Adjustment, OverloadedDeref, PointerCast}, lang_items::is_box, primitive::{FloatTy, IntTy, UintTy}, to_chalk_trait_id, traits::{next_trait_solve, NextTraitSolveResult}, utils::all_super_traits, AdtId, Canonical, CanonicalVarKinds, DebruijnIndex, DynTyExt, ForeignDefId, GenericArgData, Goal, InEnvironment, Interner, Mutability, Scalar, Substitution, TraitEnvironment, TraitRef, TraitRefExt, Ty, TyBuilder, TyExt, TyKind, TyVariableKind, VariableKind, WhereClause
+    autoderef::{self, AutoderefKind},
+    db::HirDatabase,
+    error_lifetime, from_chalk_trait_id, from_foreign_def_id,
+    infer::{unify::InferenceTable, Adjust, Adjustment, OverloadedDeref, PointerCast},
+    lang_items::is_box,
+    primitive::{FloatTy, IntTy, UintTy},
+    to_chalk_trait_id,
+    traits::{next_trait_solve, NextTraitSolveResult},
+    utils::all_super_traits,
+    AdtId, Canonical, CanonicalVarKinds, DebruijnIndex, DynTyExt, ForeignDefId, GenericArgData,
+    Goal, InEnvironment, Interner, Mutability, Scalar, Substitution, TraitEnvironment, TraitRef,
+    TraitRefExt, Ty, TyBuilder, TyExt, TyKind, TyVariableKind, VariableKind, WhereClause,
 };
 
 /// This is used as a key for indexing impls.
@@ -146,10 +157,15 @@ impl TyFingerprint {
                 //TyFingerprint::ForeignType(alias_id),
             }
             TyKind::Dynamic(bounds, _, _) => {
-                let trait_ref = bounds.as_slice().iter().map(|b| b.clone().skip_binder()).filter_map(|b| match b {
-                    rustc_type_ir::ExistentialPredicate::Trait(t) => Some(t.def_id),
-                    _ => None,
-                }).next()?;
+                let trait_ref = bounds
+                    .as_slice()
+                    .iter()
+                    .map(|b| b.clone().skip_binder())
+                    .filter_map(|b| match b {
+                        rustc_type_ir::ExistentialPredicate::Trait(t) => Some(t.def_id),
+                        _ => None,
+                    })
+                    .next()?;
                 let trait_id = match trait_ref {
                     hir_def::GenericDefId::TraitId(id) => id,
                     _ => panic!("Bad GenericDefId in trait ref"),
@@ -167,7 +183,7 @@ impl TyFingerprint {
             TyKind::FnDef(_, _)
             | TyKind::Closure(_, _)
             | TyKind::Coroutine(..)
-            | TyKind::CoroutineWitness(..) 
+            | TyKind::CoroutineWitness(..)
             | TyKind::Pat(..)
             | TyKind::CoroutineClosure(..) => TyFingerprint::Unnameable,
             TyKind::FnPtr(sig, _) => {
@@ -858,11 +874,12 @@ fn find_matching_impl(
 
             for goal in crate::chalk_db::convert_where_clauses(db, impl_.into(), &impl_substs)
                 .into_iter()
-                .map(|b| -> Goal { b.cast(Interner) }) {
-                    if table.try_obligation(goal.clone()).no_solution() {
-                        return None;
-                    }
-                    table.register_obligation(goal);
+                .map(|b| -> Goal { b.cast(Interner) })
+            {
+                if table.try_obligation(goal.clone()).no_solution() {
+                    return None;
+                }
+                table.register_obligation(goal);
             }
             Some((impl_data, table.resolve_completely(impl_substs)))
         })
@@ -1512,7 +1529,9 @@ pub(crate) fn resolve_indexing_op(
     let deref_chain = autoderef_method_receiver(&mut table, ty);
     for (ty, adj) in deref_chain {
         let goal = generic_implements_goal(db, &table.trait_env, index_trait, &ty);
-        if !next_trait_solve(db, table.trait_env.krate, table.trait_env.block, goal.cast(Interner)).no_solution() {
+        if !next_trait_solve(db, table.trait_env.krate, table.trait_env.block, goal.cast(Interner))
+            .no_solution()
+        {
             return Some(adj);
         }
     }

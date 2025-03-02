@@ -25,13 +25,23 @@ use crate::next_solver::infer::unify_key::ConstVidKey;
 use crate::next_solver::infer::{ConstVariableOrigin, RegionVariableOrigin, UnificationTable};
 use crate::next_solver::ConstKind;
 
-use rustc_type_ir::{relate::{combine::{super_combine_consts, super_combine_tys}, Relate, TypeRelation, VarianceDiagInfo}, AliasRelationDirection, AliasTyKind, InferTy, Upcast, Variance};
-use crate::next_solver::{infer::{traits::{Obligation, PredicateObligations}, DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace}, AliasTy, Binder, Const, DbInterner, DbIr, Goal, ParamEnv, Predicate, PredicateKind, Region, Span, Ty, TyKind};
+use crate::next_solver::{
+    infer::{
+        traits::{Obligation, PredicateObligations},
+        DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace,
+    },
+    AliasTy, Binder, Const, DbInterner, DbIr, Goal, ParamEnv, Predicate, PredicateKind, Region,
+    Span, Ty, TyKind,
+};
+use rustc_type_ir::{
+    relate::{
+        combine::{super_combine_consts, super_combine_tys},
+        Relate, TypeRelation, VarianceDiagInfo,
+    },
+    AliasRelationDirection, AliasTyKind, InferTy, Upcast, Variance,
+};
 
-fn vars_since_snapshot<T>(
-    table: &UnificationTable<'_, T>,
-    snapshot_var_len: usize,
-) -> Range<T>
+fn vars_since_snapshot<T>(table: &UnificationTable<'_, T>, snapshot_var_len: usize) -> Range<T>
 where
     T: UnifyKey,
     super::UndoLog: From<sv::UndoLog<ut::Delegate<T>>>,
@@ -201,9 +211,13 @@ impl TypeFolder<DbInterner> for InferenceFudger<'_, '_> {
                         // variables to their binding anyhow, we know
                         // that it is unbound, so we can just return
                         // it.
-                        debug_assert!(
-                            self.infcx.inner.borrow_mut().type_variables().probe(vid).is_unknown()
-                        );
+                        debug_assert!(self
+                            .infcx
+                            .inner
+                            .borrow_mut()
+                            .type_variables()
+                            .probe(vid)
+                            .is_unknown());
                         ty
                     }
                 }

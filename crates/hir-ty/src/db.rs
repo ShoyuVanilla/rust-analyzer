@@ -3,13 +3,11 @@
 
 use std::sync;
 
-use base_db::{
-    impl_intern_key,
-    ra_salsa,
-    CrateId, Upcast,
-};
+use base_db::{impl_intern_key, ra_salsa, CrateId, Upcast};
 use hir_def::{
-    db::DefDatabase, layout::TargetDataLayout, AdtId, BlockId, CallableDefId, ClosureId, ConstParamId, DefWithBodyId, EnumVariantId, FunctionId, GeneralConstId, GenericDefId, ImplId, LifetimeParamId, LocalFieldId, StaticId, TraitId, TypeAliasId, TypeOrConstParamId, VariantId
+    db::DefDatabase, layout::TargetDataLayout, AdtId, BlockId, CallableDefId, ClosureId,
+    ConstParamId, DefWithBodyId, EnumVariantId, FunctionId, GeneralConstId, GenericDefId, ImplId,
+    LifetimeParamId, LocalFieldId, StaticId, TraitId, TypeAliasId, TypeOrConstParamId, VariantId,
 };
 use hir_expand::name::Name;
 use la_arena::ArenaMap;
@@ -25,8 +23,8 @@ use crate::{
     lower::{Diagnostics, GenericDefaults, GenericPredicates},
     method_resolution::{InherentImpls, TraitImpls, TyFingerprint},
     mir::{BorrowckResult, MirBody, MirLowerError},
-    Binders, Const, FnDefId, ImplTraits, InferenceResult, Interner,
-    PolyFnSig, Substitution, TraitEnvironment, TraitRef, Ty, TyDefId, ValueTyDefId,
+    Binders, Const, FnDefId, ImplTraits, InferenceResult, Interner, PolyFnSig, Substitution,
+    TraitEnvironment, TraitRef, Ty, TyDefId, ValueTyDefId,
 };
 
 #[ra_salsa::query_group(HirDatabaseStorage)]

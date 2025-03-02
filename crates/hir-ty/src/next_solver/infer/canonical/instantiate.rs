@@ -6,10 +6,25 @@
 //!
 //! [c]: https://rust-lang.github.io/chalk/book/canonical_queries/canonicalization.html
 
-
+use crate::next_solver::{
+    fold::FnMutDelegate,
+    infer::{
+        traits::{Obligation, PredicateObligations},
+        DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace,
+    },
+    AliasTy, Binder, BoundRegion, BoundTy, Canonical, CanonicalVarValues, Const, DbInterner, DbIr,
+    Goal, ParamEnv, Predicate, PredicateKind, Region, Span, Ty, TyKind,
+};
 use extension_traits::extension;
-use rustc_type_ir::{fold::TypeFoldable, inherent::{IntoKind, SliceLike}, relate::{combine::{super_combine_consts, super_combine_tys}, Relate, TypeRelation, VarianceDiagInfo}, AliasRelationDirection, AliasTyKind, BoundVar, GenericArgKind, InferTy, Upcast, Variance};
-use crate::next_solver::{fold::FnMutDelegate, infer::{traits::{Obligation, PredicateObligations}, DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace}, AliasTy, Binder, BoundRegion, BoundTy, Canonical, CanonicalVarValues, Const, DbInterner, DbIr, Goal, ParamEnv, Predicate, PredicateKind, Region, Span, Ty, TyKind};
+use rustc_type_ir::{
+    fold::TypeFoldable,
+    inherent::{IntoKind, SliceLike},
+    relate::{
+        combine::{super_combine_consts, super_combine_tys},
+        Relate, TypeRelation, VarianceDiagInfo,
+    },
+    AliasRelationDirection, AliasTyKind, BoundVar, GenericArgKind, InferTy, Upcast, Variance,
+};
 
 /// FIXME(-Znext-solver): This or public because it is shared with the
 /// new trait solver implementation. We should deduplicate canonicalization.
@@ -48,11 +63,7 @@ impl<V> Canonical<V> {
 /// Instantiate the values from `var_values` into `value`. `var_values`
 /// must be values for the set of canonical variables that appear in
 /// `value`.
-pub(super) fn instantiate_value<T>(
-    tcx: DbInterner,
-    var_values: &CanonicalVarValues,
-    value: T,
-) -> T
+pub(super) fn instantiate_value<T>(tcx: DbInterner, var_values: &CanonicalVarValues, value: T) -> T
 where
     T: TypeFoldable<DbInterner>,
 {

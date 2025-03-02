@@ -7,9 +7,12 @@ use tracing::{debug, instrument};
 
 use super::RelateResult;
 use crate::next_solver::fold::FnMutDelegate;
-use crate::next_solver::infer::InferCtxt;
 use crate::next_solver::infer::snapshot::CombinedSnapshot;
-use crate::next_solver::{Binder, BoundRegion, BoundTy, Const, DbInterner, PlaceholderConst, PlaceholderRegion, PlaceholderTy, Region, Ty};
+use crate::next_solver::infer::InferCtxt;
+use crate::next_solver::{
+    Binder, BoundRegion, BoundTy, Const, DbInterner, PlaceholderConst, PlaceholderRegion,
+    PlaceholderTy, Region, Ty,
+};
 
 impl InferCtxt<'_> {
     /// Replaces all bound variables (lifetimes, types, and constants) bound by
@@ -36,16 +39,10 @@ impl InferCtxt<'_> {
 
         let delegate = FnMutDelegate {
             regions: &mut |br: BoundRegion| {
-                Region::new_placeholder(PlaceholderRegion {
-                    universe: next_universe,
-                    bound: br,
-                })
+                Region::new_placeholder(PlaceholderRegion { universe: next_universe, bound: br })
             },
             types: &mut |bound_ty: BoundTy| {
-                Ty::new_placeholder(PlaceholderTy {
-                    universe: next_universe,
-                    bound: bound_ty,
-                })
+                Ty::new_placeholder(PlaceholderTy { universe: next_universe, bound: bound_ty })
             },
             consts: &mut |bound_var: BoundVar| {
                 Const::new_placeholder(PlaceholderConst {

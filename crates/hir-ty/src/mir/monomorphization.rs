@@ -19,7 +19,13 @@ use la_arena::Idx;
 use triomphe::Arc;
 
 use crate::{
-    consteval::{intern_const_scalar, unknown_const}, db::HirDatabase, from_placeholder_idx, generics::{generics, Generics}, infer::normalize, mapping::from_opaque_ty_id, Const, Interner, ProjectionTy, Substitution, TraitEnvironment, Ty, TyKind
+    consteval::{intern_const_scalar, unknown_const},
+    db::HirDatabase,
+    from_placeholder_idx,
+    generics::{generics, Generics},
+    infer::normalize,
+    mapping::from_opaque_ty_id,
+    Const, Interner, ProjectionTy, Substitution, TraitEnvironment, Ty, TyKind,
 };
 
 use super::{MirBody, MirLowerError, Operand, Rvalue, StatementKind, TerminatorKind};

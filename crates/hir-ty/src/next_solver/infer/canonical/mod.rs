@@ -21,11 +21,27 @@
 //!
 //! [c]: https://rust-lang.github.io/chalk/book/canonical_queries/canonicalization.html
 
-
+use crate::next_solver::{
+    infer::{
+        traits::{Obligation, PredicateObligations},
+        DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace,
+    },
+    AliasTy, Binder, Canonical, CanonicalVarInfo, CanonicalVarValues, CanonicalVars, Const,
+    DbInterner, DbIr, GenericArg, Goal, ParamEnv, PlaceholderConst, PlaceholderRegion,
+    PlaceholderTy, Predicate, PredicateKind, Region, Span, Ty, TyKind,
+};
 use instantiate::CanonicalExt;
 use rustc_index_in_tree::IndexVec;
-use rustc_type_ir::{fold::TypeFoldable, inherent::{SliceLike, Ty as _}, relate::{combine::{super_combine_consts, super_combine_tys}, Relate, TypeRelation, VarianceDiagInfo}, AliasRelationDirection, AliasTyKind, CanonicalTyVarKind, CanonicalVarKind, InferTy, UniverseIndex, Upcast, Variance};
-use crate::next_solver::{infer::{traits::{Obligation, PredicateObligations}, DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace}, AliasTy, Binder, Canonical, CanonicalVarInfo, CanonicalVarValues, CanonicalVars, Const, DbInterner, DbIr, GenericArg, Goal, ParamEnv, PlaceholderConst, PlaceholderRegion, PlaceholderTy, Predicate, PredicateKind, Region, Span, Ty, TyKind};
+use rustc_type_ir::{
+    fold::TypeFoldable,
+    inherent::{SliceLike, Ty as _},
+    relate::{
+        combine::{super_combine_consts, super_combine_tys},
+        Relate, TypeRelation, VarianceDiagInfo,
+    },
+    AliasRelationDirection, AliasTyKind, CanonicalTyVarKind, CanonicalVarKind, InferTy,
+    UniverseIndex, Upcast, Variance,
+};
 
 use super::RegionVariableOrigin;
 
@@ -134,7 +150,9 @@ impl InferCtxt<'_> {
 
             CanonicalVarKind::PlaceholderRegion(PlaceholderRegion { universe, bound }) => {
                 let universe_mapped = universe_map(universe);
-                let placeholder_mapped: crate::next_solver::Placeholder<crate::next_solver::BoundRegion> = PlaceholderRegion { universe: universe_mapped, bound };
+                let placeholder_mapped: crate::next_solver::Placeholder<
+                    crate::next_solver::BoundRegion,
+                > = PlaceholderRegion { universe: universe_mapped, bound };
                 Region::new_placeholder(placeholder_mapped).into()
             }
 

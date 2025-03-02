@@ -29,7 +29,6 @@ pub use region::*;
 pub use solver::*;
 pub use ty::*;
 
-
 pub type Binder<T> = rustc_type_ir::Binder<DbInterner, T>;
 pub type EarlyBinder<T> = rustc_type_ir::EarlyBinder<DbInterner, T>;
 pub type Canonical<T> = rustc_type_ir::Canonical<DbInterner, T>;

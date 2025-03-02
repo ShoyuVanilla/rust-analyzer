@@ -2,7 +2,9 @@
 
 use either::Either;
 use hir_def::{
-    nameres::{ModuleOrigin, ModuleSource}, src::{HasChildSource, HasSource as _}, CallableDefId, ClosureLoc, Lookup, MacroId, VariantId
+    nameres::{ModuleOrigin, ModuleSource},
+    src::{HasChildSource, HasSource as _},
+    CallableDefId, ClosureLoc, Lookup, MacroId, VariantId,
 };
 use hir_expand::{HirFileId, InFile};
 use span::EditionedFileId;
@@ -240,7 +242,8 @@ impl HasSource for Param {
                 .map(|value| InFile { file_id, value })
             }
             Callee::Closure(closure, _) => {
-                let ClosureLoc { parent: owner, root: expr_id } = db.lookup_intern_closure_def(closure);
+                let ClosureLoc { parent: owner, root: expr_id } =
+                    db.lookup_intern_closure_def(closure);
                 let (_, source_map) = db.body_with_source_map(owner);
                 let ast @ InFile { file_id, value } = source_map.expr_syntax(expr_id).ok()?;
                 let root = db.parse_or_expand(file_id);

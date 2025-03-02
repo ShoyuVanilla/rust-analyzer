@@ -25,11 +25,24 @@
 //! sometimes useful when the types of `c` and `d` are not traceable
 //! things. (That system should probably be refactored.)
 
-use rustc_type_ir::{error::ExpectedFound, inherent::IntoKind, relate::{solver_relating::RelateExt, Relate, TypeRelation}, FnSig, GenericArgKind, TypingMode, Variance};
+use rustc_type_ir::{
+    error::ExpectedFound,
+    inherent::IntoKind,
+    relate::{solver_relating::RelateExt, Relate, TypeRelation},
+    FnSig, GenericArgKind, TypingMode, Variance,
+};
 
-use crate::next_solver::{AliasTerm, AliasTy, Binder, Const, DbInterner, GenericArg, Goal, ParamEnv, PolyExistentialProjection, PolyExistentialTraitRef, PolyFnSig, Predicate, Region, Term, TraitRef, Ty};
+use crate::next_solver::{
+    AliasTerm, AliasTy, Binder, Const, DbInterner, GenericArg, Goal, ParamEnv,
+    PolyExistentialProjection, PolyExistentialTraitRef, PolyFnSig, Predicate, Region, Term,
+    TraitRef, Ty,
+};
 
-use super::{relate::lattice::{LatticeOp, LatticeOpKind}, traits::{Obligation, ObligationCause}, InferCtxt, InferOk, InferResult, TypeTrace, ValuePairs};
+use super::{
+    relate::lattice::{LatticeOp, LatticeOpKind},
+    traits::{Obligation, ObligationCause},
+    InferCtxt, InferOk, InferResult, TypeTrace, ValuePairs,
+};
 
 /// Whether we should define opaque types or just treat them opaquely.
 ///
@@ -50,11 +63,7 @@ pub struct At<'a, 'db> {
 
 impl<'db> InferCtxt<'db> {
     #[inline]
-    pub fn at<'a>(
-        &'a self,
-        cause: &'a ObligationCause,
-        param_env: ParamEnv,
-    ) -> At<'a, 'db> {
+    pub fn at<'a>(&'a self, cause: &'a ObligationCause, param_env: ParamEnv) -> At<'a, 'db> {
         At { infcx: self, cause, param_env }
     }
 
@@ -82,7 +91,7 @@ impl<'db> InferCtxt<'db> {
     pub fn fork_with_typing_mode(&self, typing_mode: TypingMode<DbInterner>) -> Self {
         // Unlike `fork`, this invalidates all cache entries as they may depend on the
         // typing mode.
-        
+
         Self {
             ir: self.ir,
             typing_mode,
@@ -169,7 +178,8 @@ impl At<'_, '_> {
     where
         T: Relate<DbInterner>,
     {
-        RelateExt::relate(self.infcx, self.param_env.clone(), expected, Variance::Invariant, actual).map(|goals| self.goals_to_obligations(goals))
+        RelateExt::relate(self.infcx, self.param_env.clone(), expected, Variance::Invariant, actual)
+            .map(|goals| self.goals_to_obligations(goals))
     }
 
     pub fn relate<T>(
@@ -215,21 +225,13 @@ impl At<'_, '_> {
         Ok(InferOk { value, obligations: op.into_obligations() })
     }
 
-    fn goals_to_obligations(
-        &self,
-        goals: Vec<Goal<Predicate>>,
-    ) -> InferOk<()> {
+    fn goals_to_obligations(&self, goals: Vec<Goal<Predicate>>) -> InferOk<()> {
         InferOk {
             value: (),
             obligations: goals
                 .into_iter()
                 .map(|goal| {
-                    Obligation::new(
-                        DbInterner,
-                        self.cause.clone(),
-                        goal.param_env,
-                        goal.predicate,
-                    )
+                    Obligation::new(DbInterner, self.cause.clone(), goal.param_env, goal.predicate)
                 })
                 .collect(),
         }

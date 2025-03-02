@@ -2,10 +2,10 @@
 //! representation of the various objects Chalk deals with (types, goals etc.).
 
 use crate::{
-    chalk_db, tls, AliasTy, CanonicalVarKind, CanonicalVarKinds, Const, ConstData,
-    ConstScalar, FnAbi, FnDefId, GenericArg, GenericArgData, Goal, GoalData, InEnvironment,
-    Lifetime, LifetimeData, OpaqueTy, OpaqueTyId, ProgramClause, ProjectionTy,
-    QuantifiedWhereClause, QuantifiedWhereClauses, Substitution, Ty, TyKind, VariableKind,
+    chalk_db, tls, AliasTy, CanonicalVarKind, CanonicalVarKinds, Const, ConstData, ConstScalar,
+    FnAbi, FnDefId, GenericArg, GenericArgData, Goal, GoalData, InEnvironment, Lifetime,
+    LifetimeData, OpaqueTy, OpaqueTyId, ProgramClause, ProjectionTy, QuantifiedWhereClause,
+    QuantifiedWhereClauses, Substitution, Ty, TyKind, VariableKind,
 };
 use base_db::ra_salsa::InternId;
 use chalk_ir::{ProgramClauseImplication, SeparatorTraitRef, Variance};

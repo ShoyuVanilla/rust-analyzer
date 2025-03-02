@@ -1,7 +1,7 @@
 use hir_def::{db::DefDatabase, generics::TypeOrConstParamData, GenericDefId, GenericParamId};
 use hir_expand::name::Name;
 use intern::Symbol;
-use rustc_type_ir::inherent::{Ty as _};
+use rustc_type_ir::inherent::Ty as _;
 
 use crate::{db::HirDatabase, generics::parent_generic_def, next_solver::Ty};
 

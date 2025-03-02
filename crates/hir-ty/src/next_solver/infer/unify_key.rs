@@ -63,7 +63,9 @@ impl UnifyValue for RegionVariableValue {
                     | RegionKind::ReEarlyParam(..)
                     | RegionKind::ReError(_) => UniverseIndex::ROOT,
                     RegionKind::RePlaceholder(placeholder) => placeholder.universe,
-                    RegionKind::ReVar(..) | RegionKind::ReBound(..) => panic!("not a universal region"),
+                    RegionKind::ReVar(..) | RegionKind::ReBound(..) => {
+                        panic!("not a universal region")
+                    }
                 };
 
                 if universe.can_name(universe_of_value) {
@@ -153,8 +155,12 @@ impl UnifyValue for ConstVariableValue {
             }
 
             // If one side is known, prefer that one.
-            (ConstVariableValue::Known { .. }, ConstVariableValue::Unknown { .. }) => Ok(value1.clone()),
-            (ConstVariableValue::Unknown { .. }, ConstVariableValue::Known { .. }) => Ok(value2.clone()),
+            (ConstVariableValue::Known { .. }, ConstVariableValue::Unknown { .. }) => {
+                Ok(value1.clone())
+            }
+            (ConstVariableValue::Unknown { .. }, ConstVariableValue::Known { .. }) => {
+                Ok(value2.clone())
+            }
 
             // If both sides are *unknown*, it hardly matters, does it?
             (

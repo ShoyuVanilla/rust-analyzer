@@ -3,15 +3,37 @@ use std::sync::Arc;
 use hir_def::GenericDefId;
 use tracing::{debug, instrument};
 
-use crate::next_solver::{util::BottomUpFolder, Clause, ClauseKind, FxIndexMap, GenericArgs, OpaqueTypeKey, ProjectionPredicate, TypingMode};
+use crate::next_solver::{
+    util::BottomUpFolder, Clause, ClauseKind, FxIndexMap, GenericArgs, OpaqueTypeKey,
+    ProjectionPredicate, TypingMode,
+};
 
 mod table;
 
 pub(crate) type OpaqueTypeMap = FxIndexMap<OpaqueTypeKey, OpaqueTypeDecl>;
 pub(crate) use table::{OpaqueTypeStorage, OpaqueTypeTable};
 
-use rustc_type_ir::{error::{ExpectedFound, TypeError}, fold::TypeFoldable, inherent::{DefId, GenericArgs as _, IntoKind, SliceLike}, relate::{combine::{super_combine_consts, super_combine_tys}, Relate, TypeRelation, VarianceDiagInfo}, visit::{Flags, TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypeVisitor}, AliasRelationDirection, AliasTyKind, BoundConstness, BoundVar, GenericArgKind, InferTy, RegionKind, RustIr, TypeFlags, Upcast, Variance};
-use crate::next_solver::{fold::FnMutDelegate, infer::{traits::{Obligation, PredicateObligations}, DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace}, AliasTy, Binder, BoundRegion, BoundTy, Canonical, CanonicalVarValues, Const, DbInterner, DbIr, Goal, ParamEnv, Predicate, PredicateKind, Region, Span, Ty, TyKind};
+use crate::next_solver::{
+    fold::FnMutDelegate,
+    infer::{
+        traits::{Obligation, PredicateObligations},
+        DefineOpaqueTypes, InferCtxt, SubregionOrigin, TypeTrace,
+    },
+    AliasTy, Binder, BoundRegion, BoundTy, Canonical, CanonicalVarValues, Const, DbInterner, DbIr,
+    Goal, ParamEnv, Predicate, PredicateKind, Region, Span, Ty, TyKind,
+};
+use rustc_type_ir::{
+    error::{ExpectedFound, TypeError},
+    fold::TypeFoldable,
+    inherent::{DefId, GenericArgs as _, IntoKind, SliceLike},
+    relate::{
+        combine::{super_combine_consts, super_combine_tys},
+        Relate, TypeRelation, VarianceDiagInfo,
+    },
+    visit::{Flags, TypeSuperVisitable, TypeVisitable, TypeVisitableExt, TypeVisitor},
+    AliasRelationDirection, AliasTyKind, BoundConstness, BoundVar, GenericArgKind, InferTy,
+    RegionKind, RustIr, TypeFlags, Upcast, Variance,
+};
 
 use super::{traits::ObligationCause, InferOk};
 
@@ -53,7 +75,9 @@ impl InferCtxt<'_> {
         param_env: ParamEnv,
     ) -> Result<Vec<Goal<Predicate>>, TypeError<DbInterner>> {
         let process = |a: Ty, b: Ty| match a.kind() {
-            TyKind::Alias(AliasTyKind::Opaque, AliasTy { def_id, args, .. }) if def_id.is_local() => {
+            TyKind::Alias(AliasTyKind::Opaque, AliasTy { def_id, args, .. })
+                if def_id.is_local() =>
+            {
                 let def_id = def_id.as_local().unwrap();
                 if let TypingMode::Coherence = self.typing_mode(&param_env) {
                     // See comment on `insert_hidden_type` for why this is sufficient in coherence
@@ -102,7 +126,9 @@ impl InferCtxt<'_> {
                     return None;
                 }
 
-                if let TyKind::Alias(AliasTyKind::Opaque, AliasTy { def_id: b_def_id, .. }) = b.clone().kind() {
+                if let TyKind::Alias(AliasTyKind::Opaque, AliasTy { def_id: b_def_id, .. }) =
+                    b.clone().kind()
+                {
                     // We could accept this, but there are various ways to handle this situation,
                     // and we don't want to make a decision on it right now. Likely this case is so
                     // super rare anyway, that no one encounters it in practice. It does occur
@@ -123,7 +149,12 @@ impl InferCtxt<'_> {
                     }
                     */
                 }
-                Some(self.register_hidden_type(OpaqueTypeKey { def_id, args }, span, param_env.clone(), b))
+                Some(self.register_hidden_type(
+                    OpaqueTypeKey { def_id, args },
+                    span,
+                    param_env.clone(),
+                    b,
+                ))
             }
             _ => None,
         };
@@ -440,7 +471,13 @@ impl InferCtxt<'_> {
     ) -> Result<Vec<Goal<Predicate>>, TypeError<DbInterner>> {
         let mut goals = Vec::new();
 
-        self.insert_hidden_type(opaque_type_key.clone(), span, param_env.clone(), hidden_ty.clone(), &mut goals)?;
+        self.insert_hidden_type(
+            opaque_type_key.clone(),
+            span,
+            param_env.clone(),
+            hidden_ty.clone(),
+            &mut goals,
+        )?;
 
         self.add_item_bounds_for_hidden_type(
             opaque_type_key.def_id,
@@ -506,7 +543,10 @@ impl InferCtxt<'_> {
                             .obligations
                             .into_iter()
                             // FIXME: Shuttling between obligations and goals is awkward.
-                            .map(|value| Goal { param_env: value.param_env.clone(), predicate: value.predicate.clone() })
+                            .map(|value| Goal {
+                                param_env: value.param_env.clone(),
+                                predicate: value.predicate.clone(),
+                            }),
                     );
                 }
             }

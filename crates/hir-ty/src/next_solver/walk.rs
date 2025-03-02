@@ -2,8 +2,11 @@
 //! WARNING: this does not keep track of the region depth.
 
 use rustc_hash::FxHashSet;
-use rustc_type_ir::{inherent::{ExprConst, IntoKind, SliceLike}, GenericArgKind, TermKind};
-use smallvec::{SmallVec, smallvec};
+use rustc_type_ir::{
+    inherent::{ExprConst, IntoKind, SliceLike},
+    GenericArgKind, TermKind,
+};
+use smallvec::{smallvec, SmallVec};
 use tracing::debug;
 
 use super::{Const, ConstKind, ExistentialPredicate, GenericArg, GenericArgs, Ty, TyKind};

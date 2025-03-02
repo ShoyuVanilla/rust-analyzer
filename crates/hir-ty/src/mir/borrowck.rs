@@ -12,10 +12,8 @@ use stdx::never;
 use triomphe::Arc;
 
 use crate::{
-    db::HirDatabase,
-    mir::Operand,
-    utils::ClosureSubst,
-    Interner, Substitution, Ty, TyExt, TypeFlags,
+    db::HirDatabase, mir::Operand, utils::ClosureSubst, Interner, Substitution, Ty, TyExt,
+    TypeFlags,
 };
 
 use super::{

@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use ena::snapshot_vec as sv;
-use ena::unify as ut;
 use ena::undo_log::{Rollback, UndoLogs};
+use ena::unify as ut;
 use rustc_type_ir::FloatVid;
 use rustc_type_ir::IntVid;
 use tracing::debug;
@@ -11,7 +11,7 @@ use crate::next_solver::infer::opaque_types::OpaqueHiddenType;
 use crate::next_solver::infer::project::ProjectUndoLog;
 use crate::next_solver::infer::unify_key::ConstVidKey;
 use crate::next_solver::infer::unify_key::RegionVidKey;
-use crate::next_solver::infer::{InferCtxtInner, region_constraints, type_variable};
+use crate::next_solver::infer::{region_constraints, type_variable, InferCtxtInner};
 use crate::next_solver::OpaqueTypeKey;
 use crate::traits;
 

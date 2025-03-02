@@ -3,10 +3,7 @@ use span::{Edition, EditionedFileId};
 use syntax::{TextRange, TextSize};
 use test_fixture::WithFixture;
 
-use crate::{
-    db::HirDatabase, mir::MirLowerError, test_db::TestDB, Interner,
-    Substitution,
-};
+use crate::{db::HirDatabase, mir::MirLowerError, test_db::TestDB, Interner, Substitution};
 
 use super::{interpret_mir, MirEvalError};
 

@@ -3,7 +3,11 @@ use intern::{Interned, Symbol};
 use rustc_abi::{Float, Integer, Size};
 use rustc_ast_ir::{try_visit, visit::VisitorResult};
 use rustc_type_ir::{
-    fold::{TypeFoldable, TypeSuperFoldable}, inherent::{BoundVarLike, GenericArgs as _, IntoKind, ParamLike, PlaceholderLike, SliceLike}, relate::Relate, visit::{Flags, TypeSuperVisitable, TypeVisitable}, BoundVar, ClosureKind, FloatTy, FloatVid, InferTy, IntTy, IntVid, UintTy, WithCachedTypeInfo
+    fold::{TypeFoldable, TypeSuperFoldable},
+    inherent::{BoundVarLike, GenericArgs as _, IntoKind, ParamLike, PlaceholderLike, SliceLike},
+    relate::Relate,
+    visit::{Flags, TypeSuperVisitable, TypeVisitable},
+    BoundVar, ClosureKind, FloatTy, FloatVid, InferTy, IntTy, IntVid, UintTy, WithCachedTypeInfo,
 };
 use smallvec::SmallVec;
 

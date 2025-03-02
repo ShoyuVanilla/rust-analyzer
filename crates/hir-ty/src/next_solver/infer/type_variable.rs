@@ -2,12 +2,12 @@ use std::cmp;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use ena::undo_log::Rollback;
 use ena::snapshot_vec as sv;
+use ena::undo_log::Rollback;
 use ena::unify as ut;
 use hir_def::GenericDefId;
 use rustc_index_in_tree::IndexVec;
-use rustc_type_ir::inherent::{Ty as _};
+use rustc_type_ir::inherent::Ty as _;
 use rustc_type_ir::TyVid;
 use rustc_type_ir::UniverseIndex;
 use tracing::debug;
@@ -139,11 +139,7 @@ impl TypeVariableTable<'_> {
     /// - `origin`: indicates *why* the type variable was created.
     ///   The code in this module doesn't care, but it can be useful
     ///   for improving error messages.
-    pub(crate) fn new_var(
-        &mut self,
-        universe: UniverseIndex,
-        origin: TypeVariableOrigin,
-    ) -> TyVid {
+    pub(crate) fn new_var(&mut self, universe: UniverseIndex, origin: TypeVariableOrigin) -> TyVid {
         let eq_key = self.eq_relations().new_key(TypeVariableValue::Unknown { universe });
         let index = self.storage.values.push(TypeVariableData { origin });
         debug_assert_eq!(eq_key.vid, index);
@@ -192,7 +188,9 @@ impl TypeVariableTable<'_> {
         let range = TyVid::from_usize(value_count)..TyVid::from_usize(self.num_vars());
         (
             range.clone(),
-            (value_count..self.num_vars()).map(|index| self.var_origin(TyVid::from_usize(index))).collect(),
+            (value_count..self.num_vars())
+                .map(|index| self.var_origin(TyVid::from_usize(index)))
+                .collect(),
         )
     }
 
@@ -259,8 +257,12 @@ impl ut::UnifyValue for TypeVariableValue {
             }
 
             // If one side is known, prefer that one.
-            (&TypeVariableValue::Known { .. }, &TypeVariableValue::Unknown { .. }) => Ok(value1.clone()),
-            (&TypeVariableValue::Unknown { .. }, &TypeVariableValue::Known { .. }) => Ok(value2.clone()),
+            (&TypeVariableValue::Known { .. }, &TypeVariableValue::Unknown { .. }) => {
+                Ok(value1.clone())
+            }
+            (&TypeVariableValue::Unknown { .. }, &TypeVariableValue::Known { .. }) => {
+                Ok(value2.clone())
+            }
 
             // If both sides are *unknown*, it hardly matters, does it?
             (

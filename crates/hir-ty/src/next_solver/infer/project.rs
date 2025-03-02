@@ -7,10 +7,11 @@ use crate::next_solver::{infer::snapshot::undo_log::InferCtxtUndoLogs, AliasTerm
 
 use self::snapshot_map::{SnapshotMapRef, SnapshotMapStorage};
 
-use super::{data_structures::snapshot_map, select::EvaluationResult, traits::PredicateObligations};
+use super::{
+    data_structures::snapshot_map, select::EvaluationResult, traits::PredicateObligations,
+};
 
-pub(crate) type ProjectUndoLog =
-    snapshot_map::UndoLog<ProjectionCacheKey, ProjectionCacheEntry>;
+pub(crate) type ProjectUndoLog = snapshot_map::UndoLog<ProjectionCacheKey, ProjectionCacheEntry>;
 
 #[derive(Clone)]
 pub struct MismatchedProjectionTypes {
@@ -136,12 +137,7 @@ impl ProjectionCache<'_> {
     #[inline]
     fn map(
         &mut self,
-    ) -> SnapshotMapRef<
-        '_,
-        ProjectionCacheKey,
-        ProjectionCacheEntry,
-        InferCtxtUndoLogs,
-    > {
+    ) -> SnapshotMapRef<'_, ProjectionCacheKey, ProjectionCacheEntry, InferCtxtUndoLogs> {
         self.map.with_log(self.undo_log)
     }
 
@@ -152,10 +148,7 @@ impl ProjectionCache<'_> {
     /// Try to start normalize `key`; returns an error if
     /// normalization already occurred (this error corresponds to a
     /// cache hit, so it's actually a good thing).
-    pub fn try_start(
-        &mut self,
-        key: ProjectionCacheKey,
-    ) -> Result<(), ProjectionCacheEntry> {
+    pub fn try_start(&mut self, key: ProjectionCacheKey) -> Result<(), ProjectionCacheEntry> {
         let mut map = self.map();
         if let Some(entry) = map.get(&key) {
             return Err(entry.clone());
@@ -176,8 +169,10 @@ impl ProjectionCache<'_> {
             debug!("Not overwriting Recur");
             return;
         }
-        let fresh_key =
-            map.insert(key.clone(), ProjectionCacheEntry::NormalizedTerm { ty: value, complete: None });
+        let fresh_key = map.insert(
+            key.clone(),
+            ProjectionCacheEntry::NormalizedTerm { ty: value, complete: None },
+        );
         assert!(!fresh_key, "never started projecting `{key:?}`");
     }
 
@@ -194,10 +189,10 @@ impl ProjectionCache<'_> {
                 if result.must_apply_considering_regions() {
                     ty.obligations = PredicateObligations::new();
                 }
-                map.insert(key, ProjectionCacheEntry::NormalizedTerm {
-                    ty,
-                    complete: Some(result),
-                });
+                map.insert(
+                    key,
+                    ProjectionCacheEntry::NormalizedTerm { ty, complete: Some(result) },
+                );
             }
             ref value => {
                 // Type inference could "strand behind" old cache entries. Leave

@@ -2,43 +2,55 @@ use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::sync::Arc;
 
+pub use at::DefineOpaqueTypes;
 use ena::undo_log::UndoLogs;
+use ena::unify as ut;
 use extension_traits::extension;
+pub use freshen::TypeFreshener;
 use hir_def::GenericDefId;
 use intern::Symbol;
+use opaque_types::{OpaqueHiddenType, OpaqueTypeStorage};
 use project::ProjectionCacheStorage;
+use region_constraints::{
+    GenericKind, RegionConstraintCollector, RegionConstraintStorage, UndoLog, VarInfos, VerifyBound,
+};
+pub use relate::combine::PredicateEmittingRelation;
+pub use relate::StructurallyRelateAliases;
 use rustc_hash::{FxHashMap, FxHashSet};
 use rustc_pattern_analysis::Captures;
 use rustc_type_ir::error::{ExpectedFound, TypeError};
 use rustc_type_ir::fold::{TypeFoldable, TypeFolder, TypeSuperFoldable};
-use rustc_type_ir::inherent::{Const as _, GenericArg as _, GenericArgs as _, IntoKind, ParamEnv as _, SliceLike, Term as _, Ty as _};
+use rustc_type_ir::inherent::{
+    Const as _, GenericArg as _, GenericArgs as _, IntoKind, ParamEnv as _, SliceLike, Term as _,
+    Ty as _,
+};
+use rustc_type_ir::solve::Reveal;
 use rustc_type_ir::visit::TypeVisitableExt;
-use rustc_type_ir::{BoundVar, ClosureKind, ConstVid, FloatTy, FloatVarValue, FloatVid, GenericArgKind, InferConst, InferTy, IntTy, IntVarValue, IntVid, OutlivesPredicate, RegionVid, TyVid, UniverseIndex};
+use rustc_type_ir::{
+    BoundVar, ClosureKind, ConstVid, FloatTy, FloatVarValue, FloatVid, GenericArgKind, InferConst,
+    InferTy, IntTy, IntVarValue, IntVid, OutlivesPredicate, RegionVid, TyVid, UniverseIndex,
+};
+use snapshot::undo_log::InferCtxtUndoLogs;
+use tracing::{debug, instrument};
 use traits::{ObligationCause, ObligationInspector, PredicateObligations};
+use type_variable::TypeVariableOrigin;
 use unify_key::{ConstVariableOrigin, ConstVariableValue, ConstVidKey};
 pub use BoundRegionConversionTime::*;
 pub use RegionVariableOrigin::*;
 pub use SubregionOrigin::*;
-pub use at::DefineOpaqueTypes;
-pub use freshen::TypeFreshener;
-use opaque_types::{OpaqueHiddenType, OpaqueTypeStorage};
-use region_constraints::{
-    GenericKind, RegionConstraintCollector, RegionConstraintStorage, UndoLog, VarInfos, VerifyBound
-};
-pub use relate::StructurallyRelateAliases;
-pub use relate::combine::PredicateEmittingRelation;
-use ena::unify as ut;
-use rustc_type_ir::solve::Reveal;
-use snapshot::undo_log::InferCtxtUndoLogs;
-use tracing::{debug, instrument};
-use type_variable::TypeVariableOrigin;
 
 use crate::next_solver::fold::BoundVarReplacerDelegate;
 use crate::next_solver::{BoundRegion, BoundTy, BoundVarKind};
 
 use super::generics::{GenericParamDef, GenericParamDefKind};
-use super::{AliasTerm, Binder, BoundRegionKind, CanonicalQueryInput, CanonicalVarValues, Const, ConstKind, DbInterner, DbIr, ErrorGuaranteed, FxIndexMap, GenericArg, GenericArgs, OpaqueTypeKey, ParamEnv, PlaceholderRegion, PolyCoercePredicate, PolyExistentialProjection, PolyExistentialTraitRef, PolyFnSig, PolyRegionOutlivesPredicate, PolySubtypePredicate, Predicate, Region, Span, SubtypePredicate, Term, TraitPredicate, TraitRef, Ty, TyKind, TypingMode};
-
+use super::{
+    AliasTerm, Binder, BoundRegionKind, CanonicalQueryInput, CanonicalVarValues, Const, ConstKind,
+    DbInterner, DbIr, ErrorGuaranteed, FxIndexMap, GenericArg, GenericArgs, OpaqueTypeKey,
+    ParamEnv, PlaceholderRegion, PolyCoercePredicate, PolyExistentialProjection,
+    PolyExistentialTraitRef, PolyFnSig, PolyRegionOutlivesPredicate, PolySubtypePredicate,
+    Predicate, Region, Span, SubtypePredicate, Term, TraitPredicate, TraitRef, Ty, TyKind,
+    TypingMode,
+};
 
 pub mod at;
 pub mod canonical;
@@ -220,7 +232,10 @@ impl InferCtxtInner {
     pub fn iter_opaque_types(
         &self,
     ) -> impl Iterator<Item = (OpaqueTypeKey, OpaqueHiddenType)> + '_ {
-        self.opaque_type_storage.opaque_types.iter().map(|(k, v)| (k.clone(), v.hidden_type.clone()))
+        self.opaque_type_storage
+            .opaque_types
+            .iter()
+            .map(|(k, v)| (k.clone(), v.hidden_type.clone()))
     }
 }
 
@@ -246,8 +261,7 @@ pub struct InferCtxt<'db> {
 
     /// The set of predicates on which errors have been reported, to
     /// avoid reporting the same error twice.
-    pub reported_trait_errors:
-        RefCell<FxIndexMap<Span, (Vec<Predicate>, ErrorGuaranteed)>>,
+    pub reported_trait_errors: RefCell<FxIndexMap<Span, (Vec<Predicate>, ErrorGuaranteed)>>,
 
     pub reported_signature_mismatch: RefCell<FxHashSet<(Span, Option<Span>)>>,
 
@@ -530,11 +544,7 @@ pub struct InferCtxtBuilder<'db> {
 #[extension(pub trait DbInternerInferExt)]
 impl<'db> DbIr<'db> {
     fn infer_ctxt(self) -> InferCtxtBuilder<'db> {
-        InferCtxtBuilder {
-            ir: self,
-            considering_regions: true,
-            skip_leak_check: false,
-        }
+        InferCtxtBuilder { ir: self, considering_regions: true, skip_leak_check: false }
     }
 }
 
@@ -570,8 +580,7 @@ impl<'db> InferCtxtBuilder<'db> {
     }
 
     pub fn build(&mut self, typing_mode: TypingMode) -> InferCtxt<'db> {
-        let InferCtxtBuilder { ir, considering_regions, skip_leak_check } =
-            *self;
+        let InferCtxtBuilder { ir, considering_regions, skip_leak_check } = *self;
         InferCtxt {
             ir,
             typing_mode,
@@ -595,10 +604,7 @@ impl InferOk<()> {
 
 impl<'db> InferCtxt<'db> {
     #[inline(always)]
-    pub fn typing_mode(
-        &self,
-        param_env_for_debug_assertion: &ParamEnv,
-    ) -> TypingMode {
+    pub fn typing_mode(&self, param_env_for_debug_assertion: &ParamEnv) -> TypingMode {
         if cfg!(debug_assertions) {
             match (param_env_for_debug_assertion.reveal(), self.typing_mode.clone()) {
                 (Reveal::All, TypingMode::PostAnalysis)
@@ -663,12 +669,7 @@ impl<'db> InferCtxt<'db> {
     }
 
     #[instrument(skip(self), level = "debug")]
-    pub fn sub_regions(
-        &self,
-        origin: SubregionOrigin,
-        a: Region,
-        b: Region,
-    ) {
+    pub fn sub_regions(&self, origin: SubregionOrigin, a: Region, b: Region) {
         self.inner.borrow_mut().unwrap_region_constraints().make_subregion(origin, a, b);
     }
 
@@ -809,11 +810,7 @@ impl<'db> InferCtxt<'db> {
         Const::new_var(DbInterner, vid)
     }
 
-    pub fn next_const_var_in_universe(
-        &self,
-        span: Span,
-        universe: UniverseIndex,
-    ) -> Const {
+    pub fn next_const_var_in_universe(&self, span: Span, universe: UniverseIndex) -> Const {
         let origin = ConstVariableOrigin { span, param_def_id: None };
         let vid = self
             .inner
@@ -927,7 +924,9 @@ impl<'db> InferCtxt<'db> {
     /// Given a set of generics defined on a type or impl, returns the generic parameters mapping
     /// each type/region parameter to a fresh inference variable.
     pub fn fresh_args_for_item(&self, span: Span, def_id: GenericDefId) -> GenericArgs {
-        GenericArgs::for_item(self.ir, def_id, |name, index, kind, _| self.var_for_def(span, kind, name))
+        GenericArgs::for_item(self.ir, def_id, |name, index, kind, _| {
+            self.var_for_def(span, kind, name)
+        })
     }
 
     /// Returns `true` if errors have been reported since this infcx was
@@ -1077,9 +1076,7 @@ impl<'db> InferCtxt<'db> {
         match value {
             IntVarValue::IntType(ty) => Ty::new_int(ty),
             IntVarValue::UintType(ty) => Ty::new_uint(ty),
-            IntVarValue::Unknown => {
-                Ty::new_int_var(inner.int_unification_table().find(vid))
-            }
+            IntVarValue::Unknown => Ty::new_int_var(inner.int_unification_table().find(vid)),
         }
     }
 
@@ -1090,9 +1087,7 @@ impl<'db> InferCtxt<'db> {
         let value = inner.float_unification_table().probe_value(vid);
         match value {
             FloatVarValue::Known(ty) => Ty::new_float(ty),
-            FloatVarValue::Unknown => {
-                Ty::new_float_var(inner.float_unification_table().find(vid))
-            }
+            FloatVarValue::Unknown => Ty::new_float_var(inner.float_unification_table().find(vid)),
         }
     }
 
@@ -1393,7 +1388,9 @@ impl TypeFolder<DbInterner> for InferenceLiteralEraser {
     fn fold_ty(&mut self, ty: Ty) -> Ty {
         match ty.clone().kind() {
             TyKind::Infer(InferTy::IntVar(_) | InferTy::FreshIntTy(_)) => Ty::new_int(IntTy::I32),
-            TyKind::Infer(InferTy::FloatVar(_) | InferTy::FreshFloatTy(_)) => Ty::new_float(FloatTy::F64),
+            TyKind::Infer(InferTy::FloatVar(_) | InferTy::FreshFloatTy(_)) => {
+                Ty::new_float(FloatTy::F64)
+            }
             _ => ty.super_fold_with(self),
         }
     }
@@ -1404,12 +1401,7 @@ impl TypeTrace {
         self.cause.span
     }
 
-    pub fn types(
-        cause: &ObligationCause,
-        a_is_expected: bool,
-        a: Ty,
-        b: Ty,
-    ) -> TypeTrace {
+    pub fn types(cause: &ObligationCause, a_is_expected: bool, a: Ty, b: Ty) -> TypeTrace {
         TypeTrace {
             cause: cause.clone(),
             values: ValuePairs::Terms(ExpectedFound::new(a_is_expected, a.into(), b.into())),
@@ -1428,12 +1420,7 @@ impl TypeTrace {
         }
     }
 
-    pub fn consts(
-        cause: &ObligationCause,
-        a_is_expected: bool,
-        a: Const,
-        b: Const,
-    ) -> TypeTrace {
+    pub fn consts(cause: &ObligationCause, a_is_expected: bool, a: Const, b: Const) -> TypeTrace {
         TypeTrace {
             cause: cause.clone(),
             values: ValuePairs::Terms(ExpectedFound::new(a_is_expected, a.into(), b.into())),

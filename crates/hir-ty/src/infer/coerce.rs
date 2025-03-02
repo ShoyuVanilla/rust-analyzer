@@ -16,10 +16,16 @@ use stdx::always;
 use triomphe::Arc;
 
 use crate::{
-    autoderef::{Autoderef, AutoderefKind}, db::HirDatabase, infer::{
+    autoderef::{Autoderef, AutoderefKind},
+    db::HirDatabase,
+    infer::{
         Adjust, Adjustment, AutoBorrow, InferOk, InferenceContext, OverloadedDeref, PointerCast,
         TypeError, TypeMismatch,
-    }, traits::{next_trait_solve, NextTraitSolveResult}, utils::ClosureSubst, Canonical, DomainGoal, FnAbi, FnPointer, FnSig, InEnvironment, Interner, Lifetime, Substitution, TraitEnvironment, Ty, TyBuilder, TyExt
+    },
+    traits::{next_trait_solve, NextTraitSolveResult},
+    utils::ClosureSubst,
+    Canonical, DomainGoal, FnAbi, FnPointer, FnSig, InEnvironment, Interner, Lifetime,
+    Substitution, TraitEnvironment, Ty, TyBuilder, TyExt,
 };
 
 use super::unify::InferenceTable;
@@ -719,7 +725,12 @@ impl InferenceTable<'_> {
         // solve `CoerceUnsized` and `Unsize` goals at this point and leaves the
         // rest for later. Also, there's some logic about sized type variables.
         // Need to find out in what cases this is necessary
-        let solution = next_trait_solve(self.db, krate, self.trait_env.block, canonicalized.value.clone().cast(Interner));
+        let solution = next_trait_solve(
+            self.db,
+            krate,
+            self.trait_env.block,
+            canonicalized.value.clone().cast(Interner),
+        );
 
         match solution {
             // FIXME: this is a weaker guarantee than Chalk's `Guidance::Unique`
@@ -737,7 +748,9 @@ impl InferenceTable<'_> {
                 );
             }
             // ...so, should think about how to get some actually get some guidance here
-            NextTraitSolveResult::Uncertain | NextTraitSolveResult::NoSolution => return Err(TypeError),
+            NextTraitSolveResult::Uncertain | NextTraitSolveResult::NoSolution => {
+                return Err(TypeError)
+            }
         }
 
         let unsize =

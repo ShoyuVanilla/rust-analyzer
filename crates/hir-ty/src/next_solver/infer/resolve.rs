@@ -1,4 +1,10 @@
-use rustc_type_ir::{data_structures::DelayedMap, fold::{FallibleTypeFolder, TypeFoldable, TypeFolder, TypeSuperFoldable}, inherent::IntoKind, visit::TypeVisitableExt, ConstKind, InferConst, InferTy, RegionKind, TyKind};
+use rustc_type_ir::{
+    data_structures::DelayedMap,
+    fold::{FallibleTypeFolder, TypeFoldable, TypeFolder, TypeSuperFoldable},
+    inherent::IntoKind,
+    visit::TypeVisitableExt,
+    ConstKind, InferConst, InferTy, RegionKind, TyKind,
+};
 
 use crate::next_solver::{Const, DbInterner, Region, Ty};
 
@@ -140,7 +146,9 @@ impl FallibleTypeFolder<DbInterner> for FullTypeResolver<'_, '_> {
             match t.clone().kind() {
                 TyKind::Infer(InferTy::TyVar(vid)) => Err(FixupError { unresolved: Ty(vid) }),
                 TyKind::Infer(InferTy::IntVar(vid)) => Err(FixupError { unresolved: TyInt(vid) }),
-                TyKind::Infer(InferTy::FloatVar(vid)) => Err(FixupError { unresolved: TyFloat(vid) }),
+                TyKind::Infer(InferTy::FloatVar(vid)) => {
+                    Err(FixupError { unresolved: TyFloat(vid) })
+                }
                 TyKind::Infer(_) => {
                     panic!("Unexpected type in full type resolver: {:?}", t);
                 }

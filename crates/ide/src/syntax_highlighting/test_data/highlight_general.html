@@ -183,13 +183,8 @@ pre                 { color: #DCDCCC; background: #3F3F3F; font-size: 22px; padd
 
 <span class="keyword async">async</span> <span class="keyword">fn</span> <span class="function async declaration">async_main</span><span class="parenthesis">(</span><span class="parenthesis">)</span> <span class="brace">{</span>
     <span class="keyword">let</span> <span class="variable declaration">f1</span> <span class="operator">=</span> <span class="function async">learn_and_sing</span><span class="parenthesis">(</span><span class="parenthesis">)</span><span class="semicolon">;</span>
-<<<<<<< HEAD
     <span class="keyword">let</span> <span class="variable callable declaration">f2</span> <span class="operator">=</span> <span class="unresolved_reference">dance</span><span class="parenthesis">(</span><span class="parenthesis">)</span><span class="semicolon">;</span>
-    <span class="unresolved_reference">futures</span><span class="operator">::</span><span class="unresolved_reference">join</span><span class="macro_bang">!</span><span class="parenthesis macro">(</span><span class="none macro">f1</span><span class="comma macro">,</span> <span class="none macro">f2</span><span class="parenthesis macro">)</span><span class="semicolon">;</span>
-=======
-    <span class="keyword">let</span> <span class="variable declaration">f2</span> <span class="operator">=</span> <span class="unresolved_reference">dance</span><span class="parenthesis">(</span><span class="parenthesis">)</span><span class="semicolon">;</span>
     <span class="unresolved_reference">futures</span><span class="operator">::</span><span class="unresolved_reference">join</span><span class="macro_bang">!</span><span class="parenthesis">(</span>f1<span class="comma">,</span> f2<span class="parenthesis">)</span><span class="semicolon">;</span>
->>>>>>> origin/master
 <span class="brace">}</span>
 
 <span class="keyword">fn</span> <span class="function declaration">use_foo_items</span><span class="parenthesis">(</span><span class="parenthesis">)</span> <span class="brace">{</span>
