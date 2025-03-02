@@ -5,10 +5,18 @@ use std::{fmt::Write, iter, mem};
 use base_db::ra_salsa::Cycle;
 use chalk_ir::{BoundVar, ConstData, DebruijnIndex, TyKind};
 use hir_def::{
-    body::{Body, HygieneId}, data::adt::{StructKind, VariantData}, hir::{
-        ArithOp, Array, BinaryOp, BindingAnnotation, BindingId, ExprId, LabelId, Literal,
-        LiteralOrConst, MatchArm, Pat, PatId, RecordFieldPat, RecordLitField,
-    }, lang_item::{LangItem, LangItemTarget}, path::Path, resolver::{HasResolver, ResolveValueResult, Resolver, ValueNs}, type_ref::TypesMap, AdtId, ClosureId, ClosureLoc, DefWithBodyId, EnumVariantId, GeneralConstId, HasModule, ItemContainerId, LocalFieldId, Lookup, TraitId, TupleId, TypeOrConstParamId
+    data::adt::{StructKind, VariantData},
+    expr_store::{Body, HygieneId},
+    hir::{
+        ArithOp, Array, BinaryOp, BindingAnnotation, BindingId, ExprId, LabelId, Literal, MatchArm,
+        Pat, PatId, RecordFieldPat, RecordLitField,
+    },
+    lang_item::{LangItem, LangItemTarget},
+    path::Path,
+    resolver::{HasResolver, ResolveValueResult, Resolver, ValueNs},
+    type_ref::TypesMap,
+    AdtId, ClosureId, ClosureLoc, DefWithBodyId, EnumVariantId, GeneralConstId, HasModule,
+    ItemContainerId, LocalFieldId, Lookup, TraitId, TupleId, TypeOrConstParamId,
 };
 use hir_expand::name::Name;
 use la_arena::ArenaMap;
@@ -30,11 +38,10 @@ use crate::{
     mapping::{from_chalk_closure_id, ToChalk},
     mir::{
         intern_const_scalar, return_slot, AggregateKind, Arena, BasicBlock, BasicBlockId, BinOp,
-        BorrowKind, CastKind, ConstScalar, Either, Expr, FieldId, Idx, InferenceResult,
-        Interner, Local, LocalId, MemoryMap, MirBody, MirSpan, Mutability, Operand, Place,
-        PlaceElem, PointerCast, ProjectionElem, ProjectionStore, RawIdx, Rvalue, Statement,
-        StatementKind, Substitution, SwitchTargets, Terminator, TerminatorKind, TupleFieldId, Ty,
-        UnOp, VariantId,
+        BorrowKind, CastKind, ConstScalar, Either, Expr, FieldId, Idx, InferenceResult, Interner,
+        Local, LocalId, MemoryMap, MirBody, MirSpan, Mutability, Operand, Place, PlaceElem,
+        PointerCast, ProjectionElem, ProjectionStore, RawIdx, Rvalue, Statement, StatementKind,
+        Substitution, SwitchTargets, Terminator, TerminatorKind, TupleFieldId, Ty, UnOp, VariantId,
     },
     static_lifetime,
     traits::FnTrait,
@@ -1351,20 +1358,10 @@ impl<'ctx> MirLowerCtx<'ctx> {
         Ok(())
     }
 
-    fn lower_literal_or_const_to_operand(
-        &mut self,
-        ty: Ty,
-        loc: &LiteralOrConst,
-    ) -> Result<Operand> {
-        match loc {
-            LiteralOrConst::Literal(l) => self.lower_literal_to_operand(ty, l),
-            LiteralOrConst::Const(c) => {
-                let c = match &self.body.pats[*c] {
-                    Pat::Path(p) => p,
-                    _ => not_supported!(
-                        "only `char` and numeric types are allowed in range patterns"
-                    ),
-                };
+    fn lower_literal_or_const_to_operand(&mut self, ty: Ty, loc: &ExprId) -> Result<Operand> {
+        match &self.body.exprs[*loc] {
+            Expr::Literal(l) => self.lower_literal_to_operand(ty, l),
+            Expr::Path(c) => {
                 let edition = self.edition();
                 let unresolved_name =
                     || MirLowerError::unresolved_path(self.db, c, edition, &self.body.types);
@@ -1384,6 +1381,9 @@ impl<'ctx> MirLowerCtx<'ctx> {
                         not_supported!("associated constants in range pattern")
                     }
                 }
+            }
+            _ => {
+                not_supported!("only `char` and numeric types are allowed in range patterns");
             }
         }
     }
@@ -2016,11 +2016,11 @@ pub fn mir_body_for_closure_query(
     ctx.result.locals.alloc(Local { ty: infer[*root].clone() });
     let closure_local = ctx.result.locals.alloc(Local {
         ty: match kind {
-            FnTrait::FnOnce => infer[expr].clone(),
-            FnTrait::FnMut => {
+            FnTrait::FnOnce | FnTrait::AsyncFnOnce => infer[expr].clone(),
+            FnTrait::FnMut | FnTrait::AsyncFnMut => {
                 TyKind::Ref(Mutability::Mut, error_lifetime(), infer[expr].clone()).intern(Interner)
             }
-            FnTrait::Fn => {
+            FnTrait::Fn | FnTrait::AsyncFn => {
                 TyKind::Ref(Mutability::Not, error_lifetime(), infer[expr].clone()).intern(Interner)
             }
         },
@@ -2048,8 +2048,10 @@ pub fn mir_body_for_closure_query(
     let mut err = None;
     let closure_local = ctx.result.locals.iter().nth(1).unwrap().0;
     let closure_projection = match kind {
-        FnTrait::FnOnce => vec![],
-        FnTrait::FnMut | FnTrait::Fn => vec![ProjectionElem::Deref],
+        FnTrait::FnOnce | FnTrait::AsyncFnOnce => vec![],
+        FnTrait::FnMut | FnTrait::Fn | FnTrait::AsyncFnMut | FnTrait::AsyncFn => {
+            vec![ProjectionElem::Deref]
+        }
     };
     ctx.result.walk_places(|p, store| {
         if let Some(it) = upvar_map.get(&p.local) {
@@ -2147,7 +2149,7 @@ pub fn lower_to_mir(
     // need to take this input explicitly.
     root_expr: ExprId,
 ) -> Result<MirBody> {
-    if infer.has_errors {
+    if infer.type_mismatches().next().is_some() {
         return Err(MirLowerError::HasErrors);
     }
     let mut ctx = MirLowerCtx::new(db, owner, body, infer);

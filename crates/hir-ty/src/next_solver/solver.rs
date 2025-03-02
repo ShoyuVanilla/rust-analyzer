@@ -1,13 +1,17 @@
 use hir_def::{AssocItemId, GenericDefId, TypeAliasId};
 use rustc_next_trait_solver::delegate::SolverDelegate;
 use rustc_type_ir::{
-    inherent::Span as _, solve::{Certainty, NoSolution}, UniverseIndex
+    inherent::Span as _,
+    solve::{Certainty, NoSolution},
+    UniverseIndex,
 };
 
 use crate::{db::HirDatabase, TraitRefExt};
 
 use super::{
-    infer::{canonical::instantiate::CanonicalExt, DbInternerInferExt, InferCtxt}, Canonical, CanonicalVarInfo, CanonicalVarValues, Const, DbInterner, DbIr, GenericArg, GenericArgs, ParamEnv, Predicate, Span, Ty, UnevaluatedConst
+    infer::{canonical::instantiate::CanonicalExt, DbInternerInferExt, InferCtxt},
+    Canonical, CanonicalVarInfo, CanonicalVarValues, Const, DbInterner, DbIr, GenericArg,
+    GenericArgs, ParamEnv, Predicate, Span, Ty, UnevaluatedConst,
 };
 
 pub type Goal<P> = rustc_type_ir::solve::Goal<DbInterner, P>;
@@ -167,7 +171,9 @@ impl<'db> SolverDelegate for SolverContext<'db> {
             hir_def::GenericDefId::TypeAliasId(id) => id,
             _ => panic!("Unexpected GenericDefId"),
         };
-        let trait_ref = self.ir.db
+        let trait_ref = self
+            .ir
+            .db
             .impl_trait(impl_id)
             // ImplIds for impls where the trait ref can't be resolved should never reach solver
             .expect("invalid impl passed to next-solver")
@@ -176,17 +182,16 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         let trait_ = trait_ref.hir_trait_id();
         let impl_data = self.ir.db.impl_data(impl_id);
         let trait_data = self.ir.db.trait_data(trait_);
-        let id = impl_data
-            .items
-            .iter()
-            .find_map(|item| -> Option<_> { match item {
+        let id = impl_data.items.iter().find_map(|(_, item)| -> Option<_> {
+            match item {
                 AssocItemId::TypeAliasId(type_alias) => {
                     let name = &self.ir.db.type_alias_data(*type_alias).name;
                     let found_trait_assoc_id = trait_data.associated_type_by_name(name)?;
                     (found_trait_assoc_id == trait_assoc_id).then_some(*type_alias)
                 }
                 _ => None,
-            }});
+            }
+        });
         Ok(id.map(|id| GenericDefId::TypeAliasId(id)))
     }
 

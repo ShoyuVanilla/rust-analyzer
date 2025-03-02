@@ -18,8 +18,14 @@ extern crate ra_ap_rustc_parse_format as rustc_parse_format;
 #[cfg(feature = "in-rust-tree")]
 extern crate rustc_abi;
 
+#[cfg(feature = "in-rust-tree")]
+extern crate rustc_hashes;
+
 #[cfg(not(feature = "in-rust-tree"))]
 extern crate ra_ap_rustc_abi as rustc_abi;
+
+#[cfg(not(feature = "in-rust-tree"))]
+extern crate ra_ap_rustc_hashes as rustc_hashes;
 
 pub mod db;
 
@@ -42,7 +48,7 @@ pub mod lang_item;
 
 pub mod hir;
 pub use self::hir::type_ref;
-pub mod body;
+pub mod expr_store;
 pub mod resolver;
 
 pub mod nameres;
@@ -114,6 +120,9 @@ pub struct ImportPathConfig {
     pub prefer_prelude: bool,
     /// If true, prefer abs path (starting with `::`) where it is available.
     pub prefer_absolute: bool,
+    /// If true, paths containing `#[unstable]` segments may be returned, but only if if there is no
+    /// stable path. This does not check, whether the item itself that is being imported is `#[unstable]`.
+    pub allow_unstable: bool,
 }
 
 #[derive(Debug)]
@@ -401,7 +410,6 @@ pub struct CoroutineLoc {
 pub struct OpaqueTyId(ra_salsa::InternId);
 impl_intern!(OpaqueTyId, OpaqueTyLoc, intern_opaque_ty, lookup_intern_opaque_ty);
 
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum OpaqueTyLoc {
     // FIXME: we shouldn't be using a `RawIdx` here
@@ -539,7 +547,7 @@ impl ModuleId {
     }
 
     /// Whether this module represents the crate root module
-    fn is_crate_root(&self) -> bool {
+    pub fn is_crate_root(&self) -> bool {
         self.local_id == DefMap::ROOT && self.block.is_none()
     }
 }
@@ -727,6 +735,7 @@ impl TypeOwnerId {
         Some(match self {
             TypeOwnerId::FunctionId(it) => GenericDefId::FunctionId(it),
             TypeOwnerId::ConstId(it) => GenericDefId::ConstId(it),
+            TypeOwnerId::StaticId(it) => GenericDefId::StaticId(it),
             TypeOwnerId::AdtId(it) => GenericDefId::AdtId(it),
             TypeOwnerId::TraitId(it) => GenericDefId::TraitId(it),
             TypeOwnerId::TraitAliasId(it) => GenericDefId::TraitAliasId(it),
@@ -735,7 +744,7 @@ impl TypeOwnerId {
             TypeOwnerId::EnumVariantId(it) => {
                 GenericDefId::AdtId(AdtId::EnumId(it.lookup(db).parent))
             }
-            TypeOwnerId::InTypeConstId(_) | TypeOwnerId::StaticId(_) => return None,
+            TypeOwnerId::InTypeConstId(_) => return None,
         })
     }
 }
@@ -781,6 +790,7 @@ impl From<GenericDefId> for TypeOwnerId {
             GenericDefId::CoroutineId(it) => todo!(),
             GenericDefId::OpaqueTyId(it) => todo!(),
             GenericDefId::Ctor(..) => todo!(),
+            GenericDefId::StaticId(it) => it.into(),
         }
     }
 }
@@ -889,7 +899,7 @@ impl GeneralConstId {
     pub fn generic_def(self, db: &dyn DefDatabase) -> Option<GenericDefId> {
         match self {
             GeneralConstId::ConstId(it) => Some(it.into()),
-            GeneralConstId::StaticId(_) => None,
+            GeneralConstId::StaticId(it) => Some(it.into()),
             GeneralConstId::ConstBlockId(it) => it.lookup(db).parent.as_generic_def_id(db),
             GeneralConstId::InTypeConstId(it) => it.lookup(db).owner.as_generic_def_id(db),
         }
@@ -935,7 +945,7 @@ impl DefWithBodyId {
     pub fn as_generic_def_id(self, db: &dyn DefDatabase) -> Option<GenericDefId> {
         match self {
             DefWithBodyId::FunctionId(f) => Some(f.into()),
-            DefWithBodyId::StaticId(_) => None,
+            DefWithBodyId::StaticId(s) => Some(s.into()),
             DefWithBodyId::ConstId(c) => Some(c.into()),
             DefWithBodyId::VariantId(c) => Some(c.lookup(db).parent.into()),
             // FIXME: stable rust doesn't allow generics in constants, but we should
@@ -951,6 +961,7 @@ pub enum AssocItemId {
     ConstId(ConstId),
     TypeAliasId(TypeAliasId),
 }
+
 // FIXME: not every function, ... is actually an assoc item. maybe we should make
 // sure that you can only turn actual assoc items into AssocItemIds. This would
 // require not implementing From, and instead having some checked way of
@@ -965,30 +976,35 @@ pub enum Ctor {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum GenericDefId {
-    FunctionId(FunctionId),
     AdtId(AdtId),
-    TraitId(TraitId),
-    TraitAliasId(TraitAliasId),
-    TypeAliasId(TypeAliasId),
-    ImplId(ImplId),
     // consts can have type parameters from their parents (i.e. associated consts of traits)
     ConstId(ConstId),
     ClosureId(ClosureId),
     CoroutineId(CoroutineId),
     OpaqueTyId(OpaqueTyId),
     Ctor(Ctor),
+    FunctionId(FunctionId),
+    ImplId(ImplId),
+    // can't actually have generics currently, but they might in the future
+    // More importantly, this completes the set of items that contain type references
+    // which is to be used by the signature expression store in the future.
+    StaticId(StaticId),
+    TraitAliasId(TraitAliasId),
+    TraitId(TraitId),
+    TypeAliasId(TypeAliasId),
 }
 impl_from!(
-    FunctionId,
     AdtId(StructId, EnumId, UnionId),
-    TraitId,
-    TraitAliasId,
-    TypeAliasId,
-    ImplId,
     ConstId,
     ClosureId,
     CoroutineId,
-    OpaqueTyId
+    OpaqueTyId,
+    FunctionId,
+    ImplId,
+    StaticId,
+    TraitAliasId,
+    TraitId,
+    TypeAliasId
     for GenericDefId
 );
 
@@ -1023,6 +1039,7 @@ impl GenericDefId {
             GenericDefId::CoroutineId(it) => todo!(),
             GenericDefId::OpaqueTyId(it) => todo!(),
             GenericDefId::Ctor(..) => todo!(),
+            GenericDefId::StaticId(it) => (it.lookup(db).id.file_id(), None),
         }
     }
 
@@ -1302,7 +1319,9 @@ impl HasModule for OpaqueTyId {
         match self.lookup(db) {
             OpaqueTyLoc::ReturnTypeImplTrait(function_id, _) => function_id.module(db),
             OpaqueTyLoc::TypeAliasImplTrait(type_alias_id, _) => type_alias_id.module(db),
-            OpaqueTyLoc::AsyncBlockTypeImplTrait(def_with_body_id, _) => def_with_body_id.module(db),
+            OpaqueTyLoc::AsyncBlockTypeImplTrait(def_with_body_id, _) => {
+                def_with_body_id.module(db)
+            }
         }
     }
 }
@@ -1419,6 +1438,7 @@ impl HasModule for GenericDefId {
             GenericDefId::ClosureId(it) => todo!(),
             GenericDefId::CoroutineId(it) => todo!(),
             GenericDefId::Ctor(..) => todo!(),
+            GenericDefId::StaticId(it) => it.module(db),
         }
     }
 }
@@ -1608,3 +1628,6 @@ fn macro_call_as_call_id_with_eager(
 pub struct UnresolvedMacro {
     pub path: hir_expand::mod_path::ModPath,
 }
+
+#[derive(Default, Debug, Eq, PartialEq, Clone, Copy)]
+pub struct SyntheticSyntax;

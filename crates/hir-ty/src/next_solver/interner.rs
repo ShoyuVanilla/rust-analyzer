@@ -3,16 +3,23 @@
 use base_db::{ra_salsa::InternKey, CrateId};
 use chalk_ir::{ProgramClauseImplication, SeparatorTraitRef};
 use hir_def::data::adt::{FieldData, StructFlags};
+use hir_def::data::TraitFlags;
 use hir_def::lang_item::LangItem;
-use hir_def::{CallableDefId, EnumVariantId, ItemContainerId, OpaqueTyLoc, StructId, UnionId};
-use hir_def::{hir::PatId, AdtId, BlockId, GenericDefId, TypeAliasId, VariantId};
 use hir_def::Lookup;
+use hir_def::{hir::PatId, AdtId, BlockId, GenericDefId, TypeAliasId, VariantId};
+use hir_def::{CallableDefId, EnumVariantId, ItemContainerId, OpaqueTyLoc, StructId, UnionId};
 use intern::{impl_internable, sym, Interned};
 use la_arena::Idx;
 use rustc_abi::{ReprFlags, ReprOptions};
+use rustc_hashes::Hash64;
 use rustc_type_ir::elaborate::elaborate;
-use rustc_type_ir::inherent::{AdtDef as _, GenericsOf, IntoKind, IrGenericArgs, SliceLike, Span as _};
-use rustc_type_ir::{AliasTerm, AliasTermKind, AliasTy, EarlyBinder, ImplPolarity, InferTy, ProjectionPredicate, TraitPredicate, TraitRef};
+use rustc_type_ir::inherent::{
+    AdtDef as _, GenericsOf, IntoKind, IrGenericArgs, SliceLike, Span as _,
+};
+use rustc_type_ir::{
+    AliasTerm, AliasTermKind, AliasTy, EarlyBinder, ImplPolarity, InferTy, ProjectionPredicate,
+    TraitPredicate, TraitRef,
+};
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::ops::ControlFlow;
@@ -30,8 +37,12 @@ use rustc_type_ir::{
     UniverseIndex, Variance, WithCachedTypeInfo,
 };
 
-use crate::lower::{generic_predicates_filtered_by};
-use crate::lower_nextsolver::{self, callable_item_sig, field_types_query, generic_predicates_query, generic_predicates_without_parent_query, impl_trait_query, return_type_impl_traits, ty_query, type_alias_impl_traits, TyLoweringContext};
+use crate::lower::generic_predicates_filtered_by;
+use crate::lower_nextsolver::{
+    self, callable_item_sig, field_types_query, generic_predicates_query,
+    generic_predicates_without_parent_query, impl_trait_query, return_type_impl_traits, ty_query,
+    type_alias_impl_traits, TyLoweringContext,
+};
 use crate::method_resolution::{TyFingerprint, ALL_FLOAT_FPS, ALL_INT_FPS};
 use crate::next_solver::util::for_trait_impls;
 use crate::next_solver::FxIndexMap;
@@ -246,30 +257,27 @@ impl VariantDef {
 
     pub fn fields(&self, db: &dyn HirDatabase) -> Vec<(Idx<FieldData>, FieldData)> {
         match self {
-            VariantDef::Struct(it) => {
-                db.struct_data(*it)
-                    .variant_data
-                    .fields()
-                    .iter()
-                    .map(|(id, data)| (id, data.clone()))
-                    .collect()
-            }
-            VariantDef::Union(it) => {
-                db.union_data(*it)
-                    .variant_data
-                    .fields()
-                    .iter()
-                    .map(|(id, data)| (id, data.clone()))
-                    .collect()
-            }
-            VariantDef::Enum(it) => {
-                db.enum_variant_data(*it)
-                    .variant_data
-                    .fields()
-                    .iter()
-                    .map(|(id, data)| (id, data.clone()))
-                    .collect()
-            }
+            VariantDef::Struct(it) => db
+                .struct_data(*it)
+                .variant_data
+                .fields()
+                .iter()
+                .map(|(id, data)| (id, data.clone()))
+                .collect(),
+            VariantDef::Union(it) => db
+                .union_data(*it)
+                .variant_data
+                .fields()
+                .iter()
+                .map(|(id, data)| (id, data.clone()))
+                .collect(),
+            VariantDef::Enum(it) => db
+                .enum_variant_data(*it)
+                .variant_data
+                .fields()
+                .iter()
+                .map(|(id, data)| (id, data.clone()))
+                .collect(),
         }
     }
 }
@@ -416,7 +424,7 @@ impl AdtDef {
             align: None,
             pack: None,
             flags: ReprFlags::empty(),
-            field_shuffle_seed: 0,
+            field_shuffle_seed: Hash64::ZERO,
         };
 
         AdtDef(AdtDefData { id: def_id, variants, flags, repr })
@@ -436,7 +444,6 @@ impl AdtDef {
         assert!(self.0.flags.is_struct || self.0.flags.is_union);
         self.0.variants[0].1.clone()
     }
-    
 }
 
 impl inherent::AdtDef<DbInterner> for AdtDef {
@@ -497,27 +504,20 @@ impl<'cx> inherent::IrAdtDef<DbInterner, DbIr<'cx>> for AdtDef {
                     .map(|(idx, _)| {
                         let ty = field_types[idx].clone();
                         ty.skip_binder()
-                    }).collect()
+                    })
+                    .collect()
             };
         };
-        let field_tys = |id: VariantId| {
-            vec![]
-        };
+        let field_tys = |id: VariantId| vec![];
         let tys: Vec<_> = match self.0.id {
-            hir_def::AdtId::StructId(id) => {
-                field_tys(id.into())
-            }
-            hir_def::AdtId::UnionId(id) => {
-                field_tys(id.into())
-            }
-            hir_def::AdtId::EnumId(id) => {
-                db
-                    .enum_data(id)
-                    .variants
-                    .iter()
-                    .flat_map(|&(variant_id, _)| field_tys(variant_id.into()))
-                    .collect()
-            }
+            hir_def::AdtId::StructId(id) => field_tys(id.into()),
+            hir_def::AdtId::UnionId(id) => field_tys(id.into()),
+            hir_def::AdtId::EnumId(id) => db
+                .enum_data(id)
+                .variants
+                .iter()
+                .flat_map(|&(variant_id, _)| field_tys(variant_id.into()))
+                .collect(),
         };
 
         rustc_type_ir::EarlyBinder::bind(tys)
@@ -530,9 +530,9 @@ impl<'cx> inherent::IrAdtDef<DbInterner, DbIr<'cx>> for AdtDef {
     {
         if self.is_struct() {
             let tail_ty = self.all_field_tys(ir).skip_binder().into_iter().last()?;
-        
+
             let constraint_ty = sized_constraint_for_ty(ir, tail_ty)?;
-        
+
             Some(EarlyBinder::bind(constraint_ty))
         } else {
             None
@@ -546,26 +546,22 @@ impl<'cx> inherent::IrAdtDef<DbInterner, DbIr<'cx>> for AdtDef {
 
 impl fmt::Debug for AdtDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        crate::next_solver::tls::with_opt_db_out_of_thin_air(|db| {
-            match db {
-                Some(db) => {
-                    match self.0.id {
-                        AdtId::StructId(struct_id) => {
-                            let data = db.struct_data(struct_id);
-                            f.write_str(data.name.as_str())
-                        }
-                        AdtId::UnionId(union_id) => {
-                            let data = db.union_data(union_id);
-                            f.write_str(data.name.as_str())
-                        }
-                        AdtId::EnumId(enum_id) => {
-                            let data = db.enum_data(enum_id);
-                            f.write_str(data.name.as_str())
-                        }
-                    }
+        crate::next_solver::tls::with_opt_db_out_of_thin_air(|db| match db {
+            Some(db) => match self.0.id {
+                AdtId::StructId(struct_id) => {
+                    let data = db.struct_data(struct_id);
+                    f.write_str(data.name.as_str())
                 }
-                None => f.write_str(&format!("AdtDef({:?})", self.0.id)),
-            }
+                AdtId::UnionId(union_id) => {
+                    let data = db.union_data(union_id);
+                    f.write_str(data.name.as_str())
+                }
+                AdtId::EnumId(enum_id) => {
+                    let data = db.enum_data(enum_id);
+                    f.write_str(data.name.as_str())
+                }
+            },
+            None => f.write_str(&format!("AdtDef({:?})", self.0.id)),
         })
     }
 }
@@ -750,7 +746,6 @@ impl DbInterner {
     ) -> T {
         self.replace_escaping_bound_vars_uncached(value.skip_binder(), delegate)
     }
-
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -834,7 +829,9 @@ impl<'cx> RustIr for DbIr<'cx> {
             }
             GenericDefId::OpaqueTyId(_def_id) => {
                 // FIXME: track variances
-                VariancesOf::new_from_iter((0..self.generics_of(def_id).count()).map(|_| Variance::Invariant))
+                VariancesOf::new_from_iter(
+                    (0..self.generics_of(def_id).count()).map(|_| Variance::Invariant),
+                )
             }
             _ => todo!(),
         }
@@ -854,7 +851,7 @@ impl<'cx> RustIr for DbIr<'cx> {
                 };
                 crate::TyDefId::TypeAliasId(id)
             }
-            _ => todo!()
+            _ => todo!(),
         };
         ty_query(self.db, def_id)
     }
@@ -899,12 +896,12 @@ impl<'cx> RustIr for DbIr<'cx> {
     ) {
         let trait_def_id = self.parent(def_id);
         let generics = self.generics_of(def_id);
-        let alias_args = GenericArgs::new_from_iter(args.clone().iter().take(generics.own_params.len()));
-        let trait_args = GenericArgs::new_from_iter(args.as_slice()[generics.own_params.len()..].iter().cloned());
-        (
-            TraitRef::new_from_args(self, trait_def_id, trait_args),
-            alias_args,
-        )
+        let alias_args =
+            GenericArgs::new_from_iter(args.clone().iter().take(generics.own_params.len()));
+        let trait_args = GenericArgs::new_from_iter(
+            args.as_slice()[generics.own_params.len()..].iter().cloned(),
+        );
+        (TraitRef::new_from_args(self, trait_def_id, trait_args), alias_args)
     }
 
     fn check_args_compatible(
@@ -951,16 +948,29 @@ impl<'cx> RustIr for DbIr<'cx> {
             GenericDefId::FunctionId(it) => it.lookup(self.db.upcast()).container,
             GenericDefId::TypeAliasId(it) => it.lookup(self.db.upcast()).container,
             GenericDefId::ConstId(it) => it.lookup(self.db.upcast()).container,
-            GenericDefId::ClosureId(it) => return it.lookup(self.db.upcast()).parent.as_generic_def_id(self.db.upcast()).unwrap(),
-            GenericDefId::CoroutineId(it) => return it.lookup(self.db.upcast()).parent.as_generic_def_id(self.db.upcast()).unwrap(),
+            GenericDefId::ClosureId(it) => {
+                return it
+                    .lookup(self.db.upcast())
+                    .parent
+                    .as_generic_def_id(self.db.upcast())
+                    .unwrap()
+            }
+            GenericDefId::CoroutineId(it) => {
+                return it
+                    .lookup(self.db.upcast())
+                    .parent
+                    .as_generic_def_id(self.db.upcast())
+                    .unwrap()
+            }
             GenericDefId::OpaqueTyId(it) => todo!(),
-            GenericDefId::AdtId(_)
+            GenericDefId::StaticId(_)
+            | GenericDefId::AdtId(_)
             | GenericDefId::TraitId(_)
             | GenericDefId::ImplId(_)
             | GenericDefId::TraitAliasId(_)
             | GenericDefId::Ctor(..) => panic!(),
         };
-    
+
         match container {
             ItemContainerId::ImplId(it) => it.into(),
             ItemContainerId::TraitId(it) => it.into(),
@@ -997,13 +1007,11 @@ impl<'cx> RustIr for DbIr<'cx> {
     > {
         let id = match def_id {
             GenericDefId::FunctionId(id) => CallableDefId::FunctionId(id),
-            GenericDefId::AdtId(id) => {
-                match id {
-                    AdtId::StructId(id) => CallableDefId::StructId(id),
-                    _ => todo!(),
-                }
-            }
-            _ => unreachable!()
+            GenericDefId::AdtId(id) => match id {
+                AdtId::StructId(id) => CallableDefId::StructId(id),
+                _ => todo!(),
+            },
+            _ => unreachable!(),
         };
         callable_item_sig(self.db, id)
     }
@@ -1026,21 +1034,23 @@ impl<'cx> RustIr for DbIr<'cx> {
         self,
         def_id: <Self::Interner as rustc_type_ir::Interner>::DefId,
     ) -> bool {
-        let sized_trait = self
-            .db
-            .lang_item(self.krate, LangItem::Sized);
+        let sized_trait = self.db.lang_item(self.krate, LangItem::Sized);
         let Some(sized_id) = sized_trait.and_then(|t| t.as_trait()) else {
             return false; /* No Sized trait, can't require it! */
         };
         let sized_def_id = sized_id.into();
-    
+
         // Search for a predicate like `Self : Sized` amongst the trait bounds.
         let predicates = self.predicates_of(def_id);
         // FIXME: I don't think this worked for generic associated associated types,
         // because the parent args are *after* the item args
         elaborate(self, predicates.iter_identity()).any(|pred| match pred.kind().skip_binder() {
             ClauseKind::Trait(ref trait_pred) => {
-                trait_pred.def_id() == sized_def_id && matches!(trait_pred.self_ty().clone().kind(), TyKind::Param(ParamTy { index: 0, .. }))
+                trait_pred.def_id() == sized_def_id
+                    && matches!(
+                        trait_pred.self_ty().clone().kind(),
+                        TyKind::Param(ParamTy { index: 0, .. })
+                    )
             }
             ClauseKind::RegionOutlives(_)
             | ClauseKind::TypeOutlives(_)
@@ -1065,89 +1075,125 @@ impl<'cx> RustIr for DbIr<'cx> {
                     ItemContainerId::TraitId(t) => t,
                     _ => panic!("associated type not in trait"),
                 };
-            
+
                 let db = self.db;
                 // Lower bounds -- we could/should maybe move this to a separate query in `lower`
                 let type_alias_data = db.type_alias_data(type_alias);
                 let generic_params = generics(db.upcast(), type_alias.into());
                 let resolver = hir_def::resolver::HasResolver::resolver(type_alias, db.upcast());
-                let mut ctx =
-                    TyLoweringContext::new(db, &resolver, &type_alias_data.types_map, type_alias.into());
-            
+                let mut ctx = TyLoweringContext::new(
+                    db,
+                    &resolver,
+                    &type_alias_data.types_map,
+                    type_alias.into(),
+                );
+
                 let trait_args = GenericArgs::identity_for_item(self, trait_.into());
                 let item_args = GenericArgs::identity_for_item(self, def_id);
                 let self_ty = Ty::new_projection_from_args(self, def_id, item_args);
-            
+
                 let mut bounds = Vec::new();
                 for bound in &type_alias_data.bounds {
                     ctx.lower_type_bound(bound, self_ty.clone(), false).for_each(|pred| {
                         bounds.push(pred);
                     });
                 }
-            
+
                 if !ctx.unsized_types.contains(&self_ty) {
-                    let sized_trait = ctx
-                        .db
-                        .lang_item(self.krate, LangItem::Sized);
+                    let sized_trait = ctx.db.lang_item(self.krate, LangItem::Sized);
                     let sized_bound = sized_trait.map(|trait_id| {
-                        let trait_ref = TraitRef::new_from_args(self, trait_id.as_trait().unwrap().into(), GenericArgs::new_from_iter([self_ty.clone().into()]));
-                        Clause(Predicate::new(Binder::dummy(rustc_type_ir::PredicateKind::Clause(rustc_type_ir::ClauseKind::Trait(TraitPredicate { trait_ref, polarity: rustc_type_ir::PredicatePolarity::Positive })))))
+                        let trait_ref = TraitRef::new_from_args(
+                            self,
+                            trait_id.as_trait().unwrap().into(),
+                            GenericArgs::new_from_iter([self_ty.clone().into()]),
+                        );
+                        Clause(Predicate::new(Binder::dummy(rustc_type_ir::PredicateKind::Clause(
+                            rustc_type_ir::ClauseKind::Trait(TraitPredicate {
+                                trait_ref,
+                                polarity: rustc_type_ir::PredicatePolarity::Positive,
+                            }),
+                        ))))
                     });
                     bounds.extend(sized_bound);
                     bounds.shrink_to_fit();
                 }
-        
+
                 rustc_type_ir::EarlyBinder::bind(bounds)
             }
             GenericDefId::OpaqueTyId(id) => {
                 let full_id = self.db.lookup_intern_opaque_ty(id);
                 match full_id {
                     OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
-                        let datas = return_type_impl_traits(self.db, func).expect("impl trait id without impl traits");
+                        let datas = return_type_impl_traits(self.db, func)
+                            .expect("impl trait id without impl traits");
                         let datas = (*datas).as_ref().skip_binder();
                         let data = &datas.impl_traits[Idx::from_raw(idx)];
-                        let predicates: Vec<Clause> = elaborate(self, data.predicates.clone()).collect();
+                        let predicates: Vec<Clause> =
+                            elaborate(self, data.predicates.clone()).collect();
                         EarlyBinder::bind(predicates)
                     }
                     OpaqueTyLoc::TypeAliasImplTrait(alias, idx) => {
-                        let datas = type_alias_impl_traits(self.db, alias).expect("impl trait id without impl traits");
+                        let datas = type_alias_impl_traits(self.db, alias)
+                            .expect("impl trait id without impl traits");
                         let datas = (*datas).as_ref().skip_binder();
                         let data = &datas.impl_traits[Idx::from_raw(idx)];
-                        let predicates: Vec<Clause> = elaborate(self, data.predicates.clone()).collect();
+                        let predicates: Vec<Clause> =
+                            elaborate(self, data.predicates.clone()).collect();
                         EarlyBinder::bind(predicates)
                     }
                     OpaqueTyLoc::AsyncBlockTypeImplTrait(..) => {
-                        if let Some((future_trait, future_output)) =
-                            self.db
-                                .lang_item(self.krate, LangItem::Future)
-                                .and_then(|item| item.as_trait())
-                                .and_then(|trait_| {
-                                    let alias = self.db.trait_data(trait_).associated_type_by_name(
-                                        &hir_expand::name::Name::new_symbol_root(sym::Output.clone()),
-                                    )?;
-                                    Some((trait_, alias))
-                                })
+                        if let Some((future_trait, future_output)) = self
+                            .db
+                            .lang_item(self.krate, LangItem::Future)
+                            .and_then(|item| item.as_trait())
+                            .and_then(|trait_| {
+                                let alias = self.db.trait_data(trait_).associated_type_by_name(
+                                    &hir_expand::name::Name::new_symbol_root(sym::Output.clone()),
+                                )?;
+                                Some((trait_, alias))
+                            })
                         {
                             let args = GenericArgs::identity_for_item(self, def_id);
                             let mut predicates = vec![];
 
-                            let item_ty = Ty::new_alias(DbInterner, rustc_type_ir::AliasTyKind::Opaque, AliasTy::new_from_args(self, def_id, args));
+                            let item_ty = Ty::new_alias(
+                                DbInterner,
+                                rustc_type_ir::AliasTyKind::Opaque,
+                                AliasTy::new_from_args(self, def_id, args),
+                            );
 
                             let kind = PredicateKind::Clause(ClauseKind::Trait(TraitPredicate {
                                 polarity: rustc_type_ir::PredicatePolarity::Positive,
-                                trait_ref: TraitRef::new_from_args(self, future_trait.into(), GenericArgs::new_from_iter([item_ty.clone().into()])),
+                                trait_ref: TraitRef::new_from_args(
+                                    self,
+                                    future_trait.into(),
+                                    GenericArgs::new_from_iter([item_ty.clone().into()]),
+                                ),
                             }));
-                            predicates.push(Clause(Predicate::new(Binder::bind_with_vars(kind, BoundVarKinds::new_from_iter([BoundVarKind::Ty(BoundTyKind::Anon)])))));
+                            predicates.push(Clause(Predicate::new(Binder::bind_with_vars(
+                                kind,
+                                BoundVarKinds::new_from_iter([BoundVarKind::Ty(BoundTyKind::Anon)]),
+                            ))));
                             let sized_trait = self
                                 .db
                                 .lang_item(self.krate, LangItem::Sized)
                                 .and_then(|item| item.as_trait());
                             if let Some(sized_trait_) = sized_trait {
-                                let kind = PredicateKind::Clause(ClauseKind::Trait(TraitPredicate {
-                                    polarity: rustc_type_ir::PredicatePolarity::Positive,
-                                    trait_ref: TraitRef::new_from_args(self, sized_trait_.into(), GenericArgs::new_from_iter([item_ty.clone().into()])),
-                                }));
-                                predicates.push(Clause(Predicate::new(Binder::bind_with_vars(kind, BoundVarKinds::new_from_iter([BoundVarKind::Ty(BoundTyKind::Anon)])))));
+                                let kind =
+                                    PredicateKind::Clause(ClauseKind::Trait(TraitPredicate {
+                                        polarity: rustc_type_ir::PredicatePolarity::Positive,
+                                        trait_ref: TraitRef::new_from_args(
+                                            self,
+                                            sized_trait_.into(),
+                                            GenericArgs::new_from_iter([item_ty.clone().into()]),
+                                        ),
+                                    }));
+                                predicates.push(Clause(Predicate::new(Binder::bind_with_vars(
+                                    kind,
+                                    BoundVarKinds::new_from_iter([BoundVarKind::Ty(
+                                        BoundTyKind::Anon,
+                                    )]),
+                                ))));
                             }
                             EarlyBinder::bind(predicates)
                         } else {
@@ -1199,9 +1245,12 @@ impl<'cx> RustIr for DbIr<'cx> {
             ),
         >,
     > {
-        let predicates: Vec<(Clause, Span)> = lower_nextsolver::generic_predicates_filtered_by(self.db, def_id, |def_id| {
-            true
-        }).iter().cloned().map(|p| (p, Span::dummy())).collect();
+        let predicates: Vec<(Clause, Span)> =
+            lower_nextsolver::generic_predicates_filtered_by(self.db, def_id, |def_id| true)
+                .iter()
+                .cloned()
+                .map(|p| (p, Span::dummy()))
+                .collect();
         rustc_type_ir::EarlyBinder::bind(predicates)
     }
 
@@ -1217,9 +1266,12 @@ impl<'cx> RustIr for DbIr<'cx> {
             ),
         >,
     > {
-        let predicates: Vec<(Clause, Span)> = lower_nextsolver::generic_predicates_filtered_by(self.db, def_id, |def_id| {
-            true
-        }).iter().cloned().map(|p| (p, Span::dummy())).collect();
+        let predicates: Vec<(Clause, Span)> =
+            lower_nextsolver::generic_predicates_filtered_by(self.db, def_id, |def_id| true)
+                .iter()
+                .cloned()
+                .map(|p| (p, Span::dummy()))
+                .collect();
         rustc_type_ir::EarlyBinder::bind(predicates)
     }
 
@@ -1263,7 +1315,9 @@ impl<'cx> RustIr for DbIr<'cx> {
             rustc_type_ir::lang_items::TraitSolverLangItem::CoroutineReturn => LangItem::Coroutine,
             rustc_type_ir::lang_items::TraitSolverLangItem::CoroutineYield => todo!(),
             rustc_type_ir::lang_items::TraitSolverLangItem::Destruct => LangItem::Destruct,
-            rustc_type_ir::lang_items::TraitSolverLangItem::DiscriminantKind => LangItem::DiscriminantKind,
+            rustc_type_ir::lang_items::TraitSolverLangItem::DiscriminantKind => {
+                LangItem::DiscriminantKind
+            }
             rustc_type_ir::lang_items::TraitSolverLangItem::Drop => LangItem::Drop,
             rustc_type_ir::lang_items::TraitSolverLangItem::DynMetadata => LangItem::DynMetadata,
             rustc_type_ir::lang_items::TraitSolverLangItem::Fn => LangItem::Fn,
@@ -1279,12 +1333,17 @@ impl<'cx> RustIr for DbIr<'cx> {
             rustc_type_ir::lang_items::TraitSolverLangItem::PointeeTrait => LangItem::PointeeTrait,
             rustc_type_ir::lang_items::TraitSolverLangItem::Poll => LangItem::Poll,
             rustc_type_ir::lang_items::TraitSolverLangItem::Sized => LangItem::Sized,
-            rustc_type_ir::lang_items::TraitSolverLangItem::TransmuteTrait => LangItem::TransmuteTrait,
+            rustc_type_ir::lang_items::TraitSolverLangItem::TransmuteTrait => {
+                LangItem::TransmuteTrait
+            }
             rustc_type_ir::lang_items::TraitSolverLangItem::Tuple => LangItem::Tuple,
             rustc_type_ir::lang_items::TraitSolverLangItem::Unpin => LangItem::Unpin,
             rustc_type_ir::lang_items::TraitSolverLangItem::Unsize => LangItem::Unsize,
         };
-        let target = self.db.lang_item(self.krate, lang_item).expect(&format!("Lang item {lang_item:?} required but not found."));
+        let target = self
+            .db
+            .lang_item(self.krate, lang_item)
+            .expect(&format!("Lang item {lang_item:?} required but not found."));
         match target {
             hir_def::lang_item::LangItemTarget::EnumId(enum_id) => enum_id.into(),
             hir_def::lang_item::LangItemTarget::Function(function_id) => function_id.into(),
@@ -1357,27 +1416,51 @@ impl<'cx> RustIr for DbIr<'cx> {
         };
         let lang_item = self.db.lang_attr(trait_.into())?;
         Some(match lang_item {
-            hir_def::lang_item::LangItem::Sized => rustc_type_ir::lang_items::TraitSolverLangItem::Sized,
-            hir_def::lang_item::LangItem::Unsize => rustc_type_ir::lang_items::TraitSolverLangItem::Unsize,
+            hir_def::lang_item::LangItem::Sized => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Sized
+            }
+            hir_def::lang_item::LangItem::Unsize => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Unsize
+            }
             hir_def::lang_item::LangItem::StructuralPeq => return None,
             hir_def::lang_item::LangItem::StructuralTeq => return None,
-            hir_def::lang_item::LangItem::Copy => rustc_type_ir::lang_items::TraitSolverLangItem::Copy,
-            hir_def::lang_item::LangItem::Clone => rustc_type_ir::lang_items::TraitSolverLangItem::Clone,
+            hir_def::lang_item::LangItem::Copy => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Copy
+            }
+            hir_def::lang_item::LangItem::Clone => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Clone
+            }
             hir_def::lang_item::LangItem::Sync => return None,
-            hir_def::lang_item::LangItem::DiscriminantKind => rustc_type_ir::lang_items::TraitSolverLangItem::DiscriminantKind,
+            hir_def::lang_item::LangItem::DiscriminantKind => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::DiscriminantKind
+            }
             hir_def::lang_item::LangItem::Discriminant => return None,
-            hir_def::lang_item::LangItem::PointeeTrait => rustc_type_ir::lang_items::TraitSolverLangItem::PointeeTrait,
-            hir_def::lang_item::LangItem::Metadata => rustc_type_ir::lang_items::TraitSolverLangItem::Metadata,
-            hir_def::lang_item::LangItem::DynMetadata => rustc_type_ir::lang_items::TraitSolverLangItem::DynMetadata,
+            hir_def::lang_item::LangItem::PointeeTrait => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::PointeeTrait
+            }
+            hir_def::lang_item::LangItem::Metadata => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Metadata
+            }
+            hir_def::lang_item::LangItem::DynMetadata => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::DynMetadata
+            }
             hir_def::lang_item::LangItem::Freeze => return None,
-            hir_def::lang_item::LangItem::FnPtrTrait => rustc_type_ir::lang_items::TraitSolverLangItem::FnPtrTrait,
+            hir_def::lang_item::LangItem::FnPtrTrait => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::FnPtrTrait
+            }
             hir_def::lang_item::LangItem::FnPtrAddr => return None,
-            hir_def::lang_item::LangItem::Drop => rustc_type_ir::lang_items::TraitSolverLangItem::Drop,
-            hir_def::lang_item::LangItem::Destruct => rustc_type_ir::lang_items::TraitSolverLangItem::Destruct,
+            hir_def::lang_item::LangItem::Drop => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Drop
+            }
+            hir_def::lang_item::LangItem::Destruct => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Destruct
+            }
             hir_def::lang_item::LangItem::CoerceUnsized => return None,
             hir_def::lang_item::LangItem::DispatchFromDyn => return None,
             hir_def::lang_item::LangItem::TransmuteOpts => return None,
-            hir_def::lang_item::LangItem::TransmuteTrait => rustc_type_ir::lang_items::TraitSolverLangItem::TransmuteTrait,
+            hir_def::lang_item::LangItem::TransmuteTrait => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::TransmuteTrait
+            }
             hir_def::lang_item::LangItem::Add => return None,
             hir_def::lang_item::LangItem::Sub => return None,
             hir_def::lang_item::LangItem::Mul => return None,
@@ -1408,14 +1491,36 @@ impl<'cx> RustIr for DbIr<'cx> {
             hir_def::lang_item::LangItem::DerefMut => return None,
             hir_def::lang_item::LangItem::DerefTarget => return None,
             hir_def::lang_item::LangItem::Receiver => return None,
+            hir_def::lang_item::LangItem::ReceiverTarget => return None,
+            hir_def::lang_item::LangItem::Ordering => return None,
+            hir_def::lang_item::LangItem::PanicNullPointerDereference => return None,
             hir_def::lang_item::LangItem::Fn => rustc_type_ir::lang_items::TraitSolverLangItem::Fn,
-            hir_def::lang_item::LangItem::FnMut => rustc_type_ir::lang_items::TraitSolverLangItem::FnMut,
-            hir_def::lang_item::LangItem::FnOnce => rustc_type_ir::lang_items::TraitSolverLangItem::FnOnce,
+            hir_def::lang_item::LangItem::FnMut => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::FnMut
+            }
+            hir_def::lang_item::LangItem::FnOnce => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::FnOnce
+            }
             hir_def::lang_item::LangItem::FnOnceOutput => return None,
-            hir_def::lang_item::LangItem::Future => rustc_type_ir::lang_items::TraitSolverLangItem::Future,
+            hir_def::lang_item::LangItem::AsyncFn => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::AsyncFn
+            }
+            hir_def::lang_item::LangItem::AsyncFnMut => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::AsyncFnMut
+            }
+            hir_def::lang_item::LangItem::AsyncFnOnce => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::AsyncFnOnce
+            }
+            hir_def::lang_item::LangItem::Future => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Future
+            }
             hir_def::lang_item::LangItem::CoroutineState => return None,
-            hir_def::lang_item::LangItem::Coroutine => rustc_type_ir::lang_items::TraitSolverLangItem::Coroutine,
-            hir_def::lang_item::LangItem::Unpin => rustc_type_ir::lang_items::TraitSolverLangItem::Unpin,
+            hir_def::lang_item::LangItem::Coroutine => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Coroutine
+            }
+            hir_def::lang_item::LangItem::Unpin => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Unpin
+            }
             hir_def::lang_item::LangItem::Pin => return None,
             hir_def::lang_item::LangItem::PartialEq => return None,
             hir_def::lang_item::LangItem::PartialOrd => return None,
@@ -1452,7 +1557,9 @@ impl<'cx> RustIr for DbIr<'cx> {
             hir_def::lang_item::LangItem::AlignOffset => return None,
             hir_def::lang_item::LangItem::Termination => return None,
             hir_def::lang_item::LangItem::Try => return None,
-            hir_def::lang_item::LangItem::Tuple => rustc_type_ir::lang_items::TraitSolverLangItem::Tuple,
+            hir_def::lang_item::LangItem::Tuple => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Tuple
+            }
             hir_def::lang_item::LangItem::SliceLen => return None,
             hir_def::lang_item::LangItem::TryTraitFromResidual => return None,
             hir_def::lang_item::LangItem::TryTraitFromOutput => return None,
@@ -1460,15 +1567,21 @@ impl<'cx> RustIr for DbIr<'cx> {
             hir_def::lang_item::LangItem::TryTraitFromYeet => return None,
             hir_def::lang_item::LangItem::PointerLike => return None,
             hir_def::lang_item::LangItem::ConstParamTy => return None,
-            hir_def::lang_item::LangItem::Poll => rustc_type_ir::lang_items::TraitSolverLangItem::Poll,
+            hir_def::lang_item::LangItem::Poll => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Poll
+            }
             hir_def::lang_item::LangItem::PollReady => return None,
             hir_def::lang_item::LangItem::PollPending => return None,
             hir_def::lang_item::LangItem::ResumeTy => return None,
             hir_def::lang_item::LangItem::GetContext => return None,
             hir_def::lang_item::LangItem::Context => return None,
             hir_def::lang_item::LangItem::FuturePoll => return None,
-            hir_def::lang_item::LangItem::FutureOutput => rustc_type_ir::lang_items::TraitSolverLangItem::FutureOutput,
-            hir_def::lang_item::LangItem::Option => rustc_type_ir::lang_items::TraitSolverLangItem::Option,
+            hir_def::lang_item::LangItem::FutureOutput => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::FutureOutput
+            }
+            hir_def::lang_item::LangItem::Option => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Option
+            }
             hir_def::lang_item::LangItem::OptionSome => return None,
             hir_def::lang_item::LangItem::OptionNone => return None,
             hir_def::lang_item::LangItem::ResultOk => return None,
@@ -1478,7 +1591,9 @@ impl<'cx> RustIr for DbIr<'cx> {
             hir_def::lang_item::LangItem::IntoFutureIntoFuture => return None,
             hir_def::lang_item::LangItem::IntoIterIntoIter => return None,
             hir_def::lang_item::LangItem::IteratorNext => return None,
-            hir_def::lang_item::LangItem::Iterator => rustc_type_ir::lang_items::TraitSolverLangItem::Iterator,
+            hir_def::lang_item::LangItem::Iterator => {
+                rustc_type_ir::lang_items::TraitSolverLangItem::Iterator
+            }
             hir_def::lang_item::LangItem::PinNewUnchecked => return None,
             hir_def::lang_item::LangItem::RangeFrom => return None,
             hir_def::lang_item::LangItem::RangeFull => return None,
@@ -1497,8 +1612,8 @@ impl<'cx> RustIr for DbIr<'cx> {
         def_id: <Self::Interner as rustc_type_ir::Interner>::DefId,
     ) -> impl IntoIterator<Item = <Self::Interner as rustc_type_ir::Interner>::DefId> {
         let trait_ = match def_id {
-           GenericDefId::TraitId(id)  => id,
-           _ => unreachable!(),
+            GenericDefId::TraitId(id) => id,
+            _ => unreachable!(),
         };
         let trait_data = self.db.trait_data(trait_);
         let associated_ty_ids: Vec<_> = trait_data.associated_types().map(|id| id.into()).collect();
@@ -1511,7 +1626,6 @@ impl<'cx> RustIr for DbIr<'cx> {
         self_ty: <Self::Interner as rustc_type_ir::Interner>::Ty,
         mut f: impl FnMut(<Self::Interner as rustc_type_ir::Interner>::DefId),
     ) {
-
         let trait_ = match trait_def_id {
             GenericDefId::TraitId(id) => id,
             _ => panic!("for_each_relevant_impl called for non-trait"),
@@ -1601,7 +1715,7 @@ impl<'cx> RustIr for DbIr<'cx> {
             _ => panic!("Unexpected GenericDefId in trait_is_auto"),
         };
         let trait_data = self.db.trait_data(trait_);
-        trait_data.is_auto
+        trait_data.flags.intersects(TraitFlags::IS_AUTO)
     }
 
     fn trait_is_alias(
@@ -1631,7 +1745,7 @@ impl<'cx> RustIr for DbIr<'cx> {
             _ => panic!("Unexpected GenericDefId in trait_is_fundamental"),
         };
         let trait_data = self.db.trait_data(trait_);
-        trait_data.fundamental
+        trait_data.flags.intersects(TraitFlags::IS_FUNDAMENTAL)
     }
 
     fn trait_may_be_implemented_via_object(
@@ -1699,26 +1813,26 @@ impl<'cx> RustIr for DbIr<'cx> {
         };
         let def = AdtDef::new(id, self.db);
         let num_params = self.generics_of(adt_def_id).count();
-    
+
         let maybe_unsizing_param_idx = |arg: GenericArg| match arg.kind() {
             GenericArgKind::Type(ty) => match ty.kind() {
                 rustc_type_ir::TyKind::Param(p) => Some(p.index),
-                _ => None
-            }
+                _ => None,
+            },
             GenericArgKind::Lifetime(_) => None,
             GenericArgKind::Const(ct) => match ct.kind() {
                 rustc_type_ir::ConstKind::Param(p) => Some(p.index),
                 _ => None,
-            }
+            },
         };
-    
+
         // The last field of the structure has to exist and contain type/const parameters.
         let variant = def.non_enum_variant();
         let fields = variant.fields(self.db);
         let Some((tail_field, prefix_fields)) = fields.split_last() else {
             return UnsizingParams(BitSet::new_empty(num_params));
         };
-    
+
         let field_types = field_types_query(self.db, variant.id());
         let mut unsizing_params = BitSet::new_empty(num_params);
         let ty = field_types[tail_field.0].clone();
@@ -1727,7 +1841,7 @@ impl<'cx> RustIr for DbIr<'cx> {
                 unsizing_params.insert(i);
             }
         }
-    
+
         // Ensure none of the other fields mention the parameters used
         // in unsizing.
         for field in prefix_fields {
@@ -1737,7 +1851,7 @@ impl<'cx> RustIr for DbIr<'cx> {
                 }
             }
         }
-    
+
         UnsizingParams(unsizing_params)
     }
 
@@ -1790,7 +1904,9 @@ impl<'cx> RustIr for DbIr<'cx> {
         let mut map = Default::default();
         let delegate = Anonymize { map: &mut map };
         let inner = DbInterner.replace_escaping_bound_vars_uncached(value.skip_binder(), delegate);
-        let bound_vars = CollectAndApply::collect_and_apply(map.into_values(), |xs| BoundVarKinds::new_from_iter(xs.iter().cloned()));
+        let bound_vars = CollectAndApply::collect_and_apply(map.into_values(), |xs| {
+            BoundVarKinds::new_from_iter(xs.iter().cloned())
+        });
         Binder::bind_with_vars(inner, bound_vars)
     }
 
@@ -1887,9 +2003,7 @@ pub mod tls {
         DB.set(
             &(unsafe { std::mem::transmute::<_, &'static dyn crate::db::HirDatabase>(db) }
                 as *const dyn crate::db::HirDatabase),
-            move || {
-                f()
-            },
+            move || f(),
         )
     }
 
@@ -1903,8 +2017,9 @@ pub mod tls {
         DB.with(move |slot| f(unsafe { &**slot }))
     }
 
-
-    pub fn with_opt_db_out_of_thin_air<T>(f: impl FnOnce(Option<&dyn crate::db::HirDatabase>) -> T) -> T {
+    pub fn with_opt_db_out_of_thin_air<T>(
+        f: impl FnOnce(Option<&dyn crate::db::HirDatabase>) -> T,
+    ) -> T {
         if DB.is_set() {
             DB.with(move |slot| f(Some(unsafe { &**slot })))
         } else {

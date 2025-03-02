@@ -5,18 +5,31 @@ use base_db::ra_salsa::Cycle;
 use hir_def::{
     layout::{
         BackendRepr, FieldsShape, Float, Integer, LayoutCalculator, LayoutCalculatorError,
-        Primitive, ReprOptions, Scalar, Size, StructKind, TargetDataLayout,
-        WrappingRange,
-    }, AdtId, LocalFieldId, OpaqueTyLoc, StructId
+        Primitive, ReprOptions, Scalar, Size, StructKind, TargetDataLayout, WrappingRange,
+    },
+    AdtId, LocalFieldId, OpaqueTyLoc, StructId,
 };
 use la_arena::Idx;
 use rustc_abi::AddressSpace;
+use rustc_hashes::Hash64;
 use rustc_index::{IndexSlice, IndexVec};
 
-use rustc_type_ir::{inherent::{IntoKind, SliceLike}, FloatTy, IntTy, TyKind, UintTy};
+use rustc_type_ir::{
+    inherent::{IntoKind, SliceLike},
+    FloatTy, IntTy, TyKind, UintTy,
+};
 use triomphe::Arc;
 
-use crate::{consteval_nextsolver::try_const_usize, db::HirDatabase, layout::{adt::struct_variant_idx, Layout, LayoutError, RustcEnumVariantIdx, RustcFieldIdx, Variants}, lower_nextsolver::field_types_query, next_solver::{DbInterner, GenericArgs, Ty}, TraitEnvironment};
+use crate::{
+    consteval_nextsolver::try_const_usize,
+    db::HirDatabase,
+    layout::{
+        adt::struct_variant_idx, Layout, LayoutError, RustcEnumVariantIdx, RustcFieldIdx, Variants,
+    },
+    lower_nextsolver::field_types_query,
+    next_solver::{DbInterner, GenericArgs, Ty},
+    TraitEnvironment,
+};
 
 mod adt;
 
@@ -62,7 +75,8 @@ fn layout_of_simd_ty(
     // * the homogeneous field type and the number of fields.
     let (e_ty, e_len, is_array) = if let TyKind::Array(e_ty, _) = f0_ty.clone().kind() {
         // Extract the number of elements from the layout of the array field:
-        let FieldsShape::Array { count, .. } = layout_of_ty_query(db, f0_ty.clone(), env.clone())?.fields
+        let FieldsShape::Array { count, .. } =
+            layout_of_ty_query(db, f0_ty.clone(), env.clone())?.fields
         else {
             return Err(LayoutError::Unknown);
         };
@@ -84,7 +98,7 @@ fn layout_of_simd_ty(
         .size
         .checked_mul(e_len, dl)
         .ok_or(LayoutError::BadCalc(LayoutCalculatorError::SizeOverflow))?;
-    let align = dl.vector_align(size);
+    let align = dl.llvmlike_vector_align(size);
     let size = size.align_to(align.abi);
 
     // Compute the placement of the vector fields:
@@ -103,6 +117,8 @@ fn layout_of_simd_ty(
         align,
         max_repr_align: None,
         unadjusted_abi_align: align.abi,
+        uninhabited: false,
+        randomization_seed: Hash64::ZERO,
     }))
 }
 
@@ -184,7 +200,8 @@ pub fn layout_of_ty_query(
             }),
         ),
         TyKind::Tuple(tys) => {
-            let kind = if tys.len() == 0 { StructKind::AlwaysSized } else { StructKind::MaybeUnsized };
+            let kind =
+                if tys.len() == 0 { StructKind::AlwaysSized } else { StructKind::MaybeUnsized };
 
             let fields = tys
                 .iter()
@@ -202,14 +219,9 @@ pub fn layout_of_ty_query(
                 .checked_mul(count, dl)
                 .ok_or(LayoutError::BadCalc(LayoutCalculatorError::SizeOverflow))?;
 
-            let backend_repr =
-                if count != 0 && matches!(element.backend_repr, BackendRepr::Uninhabited) {
-                    BackendRepr::Uninhabited
-                } else {
-                    BackendRepr::Memory { sized: true }
-                };
-
+            let backend_repr = BackendRepr::Memory { sized: true };
             let largest_niche = if count != 0 { element.largest_niche } else { None };
+            let uninhabited = element.uninhabited || count == 0;
 
             Layout {
                 variants: Variants::Single { index: struct_variant_idx() },
@@ -220,6 +232,8 @@ pub fn layout_of_ty_query(
                 size,
                 max_repr_align: None,
                 unadjusted_abi_align: element.align.abi,
+                uninhabited,
+                randomization_seed: Hash64::ZERO,
             }
         }
         TyKind::Slice(element) => {
@@ -233,6 +247,8 @@ pub fn layout_of_ty_query(
                 size: Size::ZERO,
                 max_repr_align: None,
                 unadjusted_abi_align: element.align.abi,
+                uninhabited: element.uninhabited,
+                randomization_seed: Hash64::ZERO,
             }
         }
         TyKind::Str => Layout {
@@ -244,6 +260,8 @@ pub fn layout_of_ty_query(
             size: Size::ZERO,
             max_repr_align: None,
             unadjusted_abi_align: dl.i8_align.abi,
+            uninhabited: false,
+            randomization_seed: Hash64::ZERO,
         },
         // Potentially-wide pointers.
         TyKind::Ref(_, pointee, _) | TyKind::RawPtr(pointee, _) => {
@@ -301,28 +319,28 @@ pub fn layout_of_ty_query(
             ptr.valid_range_mut().start = 1;
             Layout::scalar(dl, ptr)
         }
-        TyKind::Alias(_, ty) => {
-            match ty.def_id {
-                hir_def::GenericDefId::TypeAliasId(_) => todo!(),
-                hir_def::GenericDefId::OpaqueTyId(opaque) => {
-                    let impl_trait_id = db.lookup_intern_opaque_ty(opaque);
-                    match impl_trait_id {
-                        OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
-                            let infer = db.infer(func.into());
-                            return db.layout_of_ty(infer.type_of_rpit[Idx::from_raw(idx)].clone(), trait_env);
-                        }
-                        OpaqueTyLoc::TypeAliasImplTrait(..) => {
-                            return Err(LayoutError::NotImplemented);
-                        }
-                        OpaqueTyLoc::AsyncBlockTypeImplTrait(_, _) => {
-                            return Err(LayoutError::NotImplemented)
-                        }
+        TyKind::Alias(_, ty) => match ty.def_id {
+            hir_def::GenericDefId::TypeAliasId(_) => todo!(),
+            hir_def::GenericDefId::OpaqueTyId(opaque) => {
+                let impl_trait_id = db.lookup_intern_opaque_ty(opaque);
+                match impl_trait_id {
+                    OpaqueTyLoc::ReturnTypeImplTrait(func, idx) => {
+                        let infer = db.infer(func.into());
+                        return db.layout_of_ty(
+                            infer.type_of_rpit[Idx::from_raw(idx)].clone(),
+                            trait_env,
+                        );
+                    }
+                    OpaqueTyLoc::TypeAliasImplTrait(..) => {
+                        return Err(LayoutError::NotImplemented);
+                    }
+                    OpaqueTyLoc::AsyncBlockTypeImplTrait(_, _) => {
+                        return Err(LayoutError::NotImplemented)
                     }
                 }
-                _ => unreachable!(),
             }
-
-        }
+            _ => unreachable!(),
+        },
         TyKind::Closure(_, _) => {
             todo!()
             /*
@@ -352,10 +370,9 @@ pub fn layout_of_ty_query(
             return Err(LayoutError::NotImplemented)
         }
         TyKind::Error(_) => return Err(LayoutError::HasErrorType),
-        TyKind::Placeholder(_)
-        | TyKind::Bound(..)
-        | TyKind::Infer(..)
-        | TyKind::Param(..) => return Err(LayoutError::HasPlaceholder),
+        TyKind::Placeholder(_) | TyKind::Bound(..) | TyKind::Infer(..) | TyKind::Param(..) => {
+            return Err(LayoutError::HasPlaceholder)
+        }
         TyKind::Pat(..) | TyKind::CoroutineClosure(..) => todo!(),
     };
     Ok(Arc::new(result))

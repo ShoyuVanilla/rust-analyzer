@@ -2,7 +2,7 @@
 
 use base_db::CrateId;
 use hir_def::{
-    body::{Body, HygieneId},
+    expr_store::{Body, HygieneId},
     hir::{Expr, ExprId},
     path::Path,
     resolver::{Resolver, ValueNs},
@@ -15,7 +15,15 @@ use stdx::never;
 use triomphe::Arc;
 
 use crate::{
-    consteval::ConstEvalError, db::HirDatabase, generics::Generics, infer::InferenceContext, layout_nextsolver::layout_of_ty_query, next_solver::{mapping::ChalkToNextSolver, Const, ConstKind, GenericArg, ParamConst, Ty, ValueConst}, ConstScalar, Interner, MemoryMap, Substitution, TraitEnvironment,
+    consteval::ConstEvalError,
+    db::HirDatabase,
+    generics::Generics,
+    infer::InferenceContext,
+    layout_nextsolver::layout_of_ty_query,
+    next_solver::{
+        mapping::ChalkToNextSolver, Const, ConstKind, GenericArg, ParamConst, Ty, ValueConst,
+    },
+    ConstScalar, Interner, MemoryMap, Substitution, TraitEnvironment,
 };
 
 use super::mir::{interpret_mir, lower_to_mir, pad16};
@@ -30,10 +38,14 @@ pub(crate) fn path_to_const<'g>(
     match resolver.resolve_path_in_value_ns_fully(db.upcast(), path, HygieneId::ROOT) {
         Some(ValueNs::GenericParam(p)) => {
             let args = args();
-            match args.and_then(|args| args.type_or_const_param(p.into())).and_then(|(idx, p)| p.const_param().map(|p| (idx, p))) {
-                Some((idx, param)) => {
-                    Some(Const::new_param(ParamConst { index: idx as u32, name: param.name.symbol().clone() }))
-                }
+            match args
+                .and_then(|args| args.type_or_const_param(p.into()))
+                .and_then(|(idx, p)| p.const_param().map(|p| (idx, p)))
+            {
+                Some((idx, param)) => Some(Const::new_param(ParamConst {
+                    index: idx as u32,
+                    name: param.name.symbol().clone(),
+                })),
                 None => {
                     never!(
                         "Generic list doesn't contain this param: {:?}, {:?}, {:?}",
@@ -113,12 +125,16 @@ pub fn try_const_usize(db: &dyn HirDatabase, c: &Const) -> Option<u128> {
         ConstKind::Value(_, val) => match val.0 {
             ConstScalar::Bytes(it, _) => Some(u128::from_le_bytes(pad16(&it, false))),
             ConstScalar::UnevaluatedConst(c, subst) => {
-                let fake_ir = crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
+                let fake_ir = crate::next_solver::DbIr::new(
+                    db,
+                    CrateId::from_raw(la_arena::RawIdx::from_u32(0)),
+                    None,
+                );
                 let ec = db.const_eval(c, subst.clone(), None).ok()?.to_nextsolver(fake_ir);
                 try_const_usize(db, &ec)
             }
             ConstScalar::Unknown => None,
-        }
+        },
         ConstKind::Error(_) => None,
         ConstKind::Expr(_) => todo!(),
     }
@@ -134,12 +150,16 @@ pub fn try_const_isize(db: &dyn HirDatabase, c: &Const) -> Option<i128> {
         ConstKind::Value(_, val) => match val.0 {
             ConstScalar::Bytes(it, _) => Some(i128::from_le_bytes(pad16(&it, false))),
             ConstScalar::UnevaluatedConst(c, subst) => {
-                let fake_ir = crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
+                let fake_ir = crate::next_solver::DbIr::new(
+                    db,
+                    CrateId::from_raw(la_arena::RawIdx::from_u32(0)),
+                    None,
+                );
                 let ec = db.const_eval(c, subst.clone(), None).ok()?.to_nextsolver(fake_ir);
                 try_const_isize(db, &ec)
             }
             ConstScalar::Unknown => None,
-        }
+        },
         ConstKind::Error(_) => None,
         ConstKind::Expr(_) => todo!(),
     }
@@ -149,7 +169,8 @@ pub(crate) fn const_eval_discriminant_variant(
     db: &dyn HirDatabase,
     variant_id: EnumVariantId,
 ) -> Result<i128, ConstEvalError> {
-    let fake_ir = crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
+    let fake_ir =
+        crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
     let def = variant_id.into();
     let body = db.body(def);
     let loc = variant_id.lookup(db.upcast());
@@ -187,12 +208,10 @@ pub(crate) fn const_eval_discriminant_variant(
 // FIXME: Ideally constants in const eval should have separate body (issue #7434), and this function should
 // get an `InferenceResult` instead of an `InferenceContext`. And we should remove `ctx.clone().resolve_all()` here
 // and make this function private. See the fixme comment on `InferenceContext::resolve_all`.
-pub(crate) fn eval_to_const(
-    expr: ExprId,
-    ctx: &mut InferenceContext<'_>,
-) -> Const {
+pub(crate) fn eval_to_const(expr: ExprId, ctx: &mut InferenceContext<'_>) -> Const {
     let db = ctx.db;
-    let fake_ir = crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
+    let fake_ir =
+        crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
     let infer = ctx.clone().resolve_all();
     fn has_closure(body: &Body, expr: ExprId) -> bool {
         if matches!(body[expr], Expr::Closure { .. }) {

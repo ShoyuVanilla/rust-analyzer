@@ -9,13 +9,24 @@ use chalk_ir::{
 };
 use chalk_solve::rust_ir::InlineBound;
 use hir_def::{
-    lang_item::LangItem, AssocItemId, ConstId, FunctionId, GenericDefId, HasModule, OpaqueTyLoc, TraitId, TypeAliasId
+    data::TraitFlags, lang_item::LangItem, AssocItemId, ConstId, FunctionId, GenericDefId,
+    HasModule, OpaqueTyLoc, TraitId, TypeAliasId,
 };
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 use crate::{
-    all_super_traits, db::HirDatabase, from_assoc_type_id, from_chalk_trait_id, generics::{generics, trait_self_param_idx}, lower::callable_item_sig, mapping::from_opaque_ty_id, to_assoc_type_id, to_chalk_trait_id, traits::next_trait_solve, utils::elaborate_clause_supertraits, AliasEq, AliasTy, Binders, BoundVar, CallableSig, DomainGoal, GoalData, Interner, OpaqueTyId, ProjectionTyExt, Substitution, TraitRef, Ty, TyKind, WhereClause
+    all_super_traits,
+    db::HirDatabase,
+    from_assoc_type_id, from_chalk_trait_id,
+    generics::{generics, trait_self_param_idx},
+    lower::callable_item_sig,
+    mapping::from_opaque_ty_id,
+    to_assoc_type_id, to_chalk_trait_id,
+    traits::next_trait_solve,
+    utils::elaborate_clause_supertraits,
+    AliasEq, AliasTy, Binders, BoundVar, CallableSig, DomainGoal, GoalData, Interner, OpaqueTyId,
+    ProjectionTyExt, Substitution, TraitRef, Ty, TyKind, WhereClause,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -423,7 +434,7 @@ where
         // Allow `impl AutoTrait` predicates
         if let WhereClause::Implemented(TraitRef { trait_id, substitution }) = pred {
             let trait_data = db.trait_data(from_chalk_trait_id(*trait_id));
-            if trait_data.is_auto
+            if trait_data.flags.contains(TraitFlags::IS_AUTO)
                 && substitution
                     .as_slice(Interner)
                     .first()
@@ -463,7 +474,7 @@ fn receiver_is_dispatchable(
         return false;
     };
 
-    // `self: Self` can't be dispatched on, but this is already considered dyn compatible
+    // `self: Self` can't be dispatched on, but this is already considered dyn-compatible
     // See rustc's comment on https://github.com/rust-lang/rust/blob/3f121b9461cce02a703a0e7e450568849dfaa074/compiler/rustc_trait_selection/src/traits/object_safety.rs#L433-L437
     if sig
         .skip_binders()

@@ -14,7 +14,11 @@ use smallvec::SmallVec;
 use triomphe::Arc;
 
 use crate::{
-    db::HirDatabase, lang_items::is_unsafe_cell, layout::{Layout, LayoutError}, next_solver::GenericArgs, Substitution, TraitEnvironment
+    db::HirDatabase,
+    lang_items::is_unsafe_cell,
+    layout::{Layout, LayoutError},
+    next_solver::GenericArgs,
+    Substitution, TraitEnvironment,
 };
 
 use super::{field_ty, layout_of_ty_query, LayoutCx};
@@ -106,7 +110,7 @@ fn layout_scalar_valid_range(db: &dyn HirDatabase, def: AdtId) -> (Bound<u128>, 
     let get = |name| {
         let attr = attrs.by_key(name).tt_values();
         for tree in attr {
-            if let Some(it) = tree.token_trees.first() {
+            if let Some(it) = tree.token_trees().iter().next_as_view() {
                 let text = it.to_string().replace('_', "");
                 let (text, base) = match text.as_bytes() {
                     [b'0', b'x', ..] => (&text[2..], 16),
