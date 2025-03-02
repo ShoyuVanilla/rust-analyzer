@@ -354,9 +354,7 @@ impl ChalkToNextSolver<Ty> for chalk_ir::Ty<Interner> {
                 },
             ),
             chalk_ir::TyKind::InferenceVar(inference_var, ty_variable_kind) => {
-                rustc_type_ir::TyKind::Infer(
-                    (*inference_var, *ty_variable_kind).to_nextsolver(ir),
-                )
+                rustc_type_ir::TyKind::Infer((*inference_var, *ty_variable_kind).to_nextsolver(ir))
             }
         })
     }
@@ -722,7 +720,13 @@ impl ChalkToNextSolver<PredicateKind> for chalk_ir::ProgramClauseImplication<Int
                     let r = type_outlives.lifetime.to_nextsolver(ir);
                     PredicateKind::Clause(ClauseKind::TypeOutlives(OutlivesPredicate(ty, r)))
                 }
-                chalk_ir::WhereClause::LifetimeOutlives(lifetime_outlives) => todo!(),
+                chalk_ir::WhereClause::LifetimeOutlives(lifetime_outlives) => {
+                    let a = lifetime_outlives.a.to_nextsolver(ir);
+                    let b = lifetime_outlives.b.to_nextsolver(ir);
+                    PredicateKind::Clause(rustc_type_ir::ClauseKind::RegionOutlives(
+                        OutlivesPredicate(a, b),
+                    ))
+                }
             },
             chalk_ir::DomainGoal::WellFormed(well_formed) => todo!(),
             chalk_ir::DomainGoal::FromEnv(from_env) => match from_env {
