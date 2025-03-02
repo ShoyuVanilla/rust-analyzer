@@ -88,7 +88,7 @@ impl<T: PartialEq> PartialEq<Obligation<T>> for Obligation<T> {
 impl<T: Eq> Eq for Obligation<T> {}
 
 impl<T: Hash> Hash for Obligation<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) -> () {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         // See the comment on `Obligation::eq`.
         self.param_env.hash(state);
         self.predicate.hash(state);

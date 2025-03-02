@@ -25,7 +25,7 @@ struct VariableLengths {
     const_var_len: usize,
 }
 
-impl<'db> InferCtxt<'db> {
+impl InferCtxt<'_> {
     fn variable_lengths(&self) -> VariableLengths {
         let mut inner = self.inner.borrow_mut();
         VariableLengths {

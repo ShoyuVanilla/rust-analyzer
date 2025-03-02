@@ -58,7 +58,7 @@ fn const_vars_since_snapshot(
     )
 }
 
-impl<'db> InferCtxt<'db> {
+impl InferCtxt<'_> {
     /// This rather funky routine is used while processing expected
     /// types. What happens here is that we want to propagate a
     /// coercion through the return type of a fn to its
@@ -180,7 +180,7 @@ struct InferenceFudger<'a, 'db> {
     snapshot_vars: SnapshotVarData,
 }
 
-impl<'a, 'db> TypeFolder<DbInterner> for InferenceFudger<'a, 'db> {
+impl TypeFolder<DbInterner> for InferenceFudger<'_, '_> {
     fn cx(&self) -> DbInterner {
         DbInterner
     }

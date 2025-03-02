@@ -213,7 +213,7 @@ impl<'db> TypeRelation for LatticeOp<'_, 'db> {
     }
 }
 
-impl<'infcx, 'db> LatticeOp<'infcx, 'db> {
+impl LatticeOp<'_, '_> {
     // Relates the type `v` to `a` and `b` such that `v` represents
     // the LUB/GLB of `a` and `b` as appropriate.
     //

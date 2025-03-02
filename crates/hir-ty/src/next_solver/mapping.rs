@@ -355,7 +355,7 @@ impl ChalkToNextSolver<Ty> for chalk_ir::Ty<Interner> {
             ),
             chalk_ir::TyKind::InferenceVar(inference_var, ty_variable_kind) => {
                 rustc_type_ir::TyKind::Infer(
-                    (inference_var.clone(), ty_variable_kind.clone()).to_nextsolver(ir),
+                    (*inference_var, *ty_variable_kind).to_nextsolver(ir),
                 )
             }
         })

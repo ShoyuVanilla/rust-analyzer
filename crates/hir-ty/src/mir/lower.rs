@@ -2001,7 +2001,7 @@ pub fn mir_body_for_closure_query(
     db: &dyn HirDatabase,
     closure: ClosureId,
 ) -> Result<Arc<MirBody>> {
-    let ClosureLoc { parent: owner, root: expr } = db.lookup_intern_closure_def(closure.into());
+    let ClosureLoc { parent: owner, root: expr } = db.lookup_intern_closure_def(closure);
     let body = db.body(owner);
     let infer = db.infer(owner);
     let Expr::Closure { args, body: root, .. } = &body[expr] else {

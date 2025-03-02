@@ -23,7 +23,7 @@ use crate::{
 
 use super::{field_ty, layout_of_ty_query, LayoutCx};
 
-pub fn layout_of_adt_query(
+pub(super) fn layout_of_adt_query(
     db: &dyn HirDatabase,
     def: AdtId,
     args: &GenericArgs,
@@ -132,7 +132,7 @@ fn layout_scalar_valid_range(db: &dyn HirDatabase, def: AdtId) -> (Bound<u128>, 
     )
 }
 
-pub fn layout_of_adt_recover(
+pub(super) fn layout_of_adt_recover(
     _: &dyn HirDatabase,
     _: &Cycle,
     _: &AdtId,

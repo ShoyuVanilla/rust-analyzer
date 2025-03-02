@@ -31,7 +31,7 @@ pub struct OpaqueTypeDecl {
     pub hidden_type: OpaqueHiddenType,
 }
 
-impl<'db> InferCtxt<'db> {
+impl InferCtxt<'_> {
     /// This is a backwards compatibility hack to prevent breaking changes from
     /// lazy TAIT around RPIT handling.
     pub fn replace_opaque_types_with_inference_vars<T: TypeFoldable<DbInterner>>(
@@ -42,7 +42,7 @@ impl<'db> InferCtxt<'db> {
         param_env: ParamEnv,
     ) -> InferOk<T> {
         // We handle opaque types differently in the new solver.
-        return InferOk { value, obligations: PredicateObligations::from_iter([]) };
+        InferOk { value, obligations: PredicateObligations::from_iter([]) }
     }
 
     pub fn handle_opaque_type(
@@ -429,7 +429,7 @@ where
     }
 }
 
-impl<'db> InferCtxt<'db> {
+impl InferCtxt<'_> {
     #[instrument(skip(self), level = "debug")]
     fn register_hidden_type(
         &self,

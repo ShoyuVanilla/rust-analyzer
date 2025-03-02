@@ -31,7 +31,7 @@ use super::RegionVariableOrigin;
 
 pub mod instantiate;
 
-impl<'db> InferCtxt<'db> {
+impl InferCtxt<'_> {
     /// Creates an instantiation S for the canonical value with fresh inference
     /// variables and placeholders then applies it to the canonical value.
     /// Returns both the instantiated result *and* the instantiation S.

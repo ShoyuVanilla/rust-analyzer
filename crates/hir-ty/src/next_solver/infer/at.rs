@@ -82,7 +82,8 @@ impl<'db> InferCtxt<'db> {
     pub fn fork_with_typing_mode(&self, typing_mode: TypingMode<DbInterner>) -> Self {
         // Unlike `fork`, this invalidates all cache entries as they may depend on the
         // typing mode.
-        let forked = Self {
+        
+        Self {
             ir: self.ir,
             typing_mode,
             considering_regions: self.considering_regions,
@@ -93,8 +94,7 @@ impl<'db> InferCtxt<'db> {
             tainted_by_errors: self.tainted_by_errors.clone(),
             universe: self.universe.clone(),
             obligation_inspector: self.obligation_inspector.clone(),
-        };
-        forked
+        }
     }
 }
 
@@ -102,7 +102,7 @@ pub trait ToTrace: Relate<DbInterner> {
     fn to_trace(cause: &ObligationCause, a: Self, b: Self) -> TypeTrace;
 }
 
-impl<'a, 'db> At<'a, 'db> {
+impl At<'_, '_> {
     /// Makes `actual <: expected`. For example, if type-checking a
     /// call like `foo(x)`, where `foo: fn(i32)`, you might have
     /// `sup(i32, x)`, since the "expected" type is the type that

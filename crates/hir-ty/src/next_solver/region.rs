@@ -232,36 +232,36 @@ impl Region {
 
         match &self.0 .0 {
             RegionKind::ReVar(..) => {
-                flags = flags | TypeFlags::HAS_FREE_REGIONS;
-                flags = flags | TypeFlags::HAS_FREE_LOCAL_REGIONS;
-                flags = flags | TypeFlags::HAS_RE_INFER;
+                flags |= TypeFlags::HAS_FREE_REGIONS;
+                flags |= TypeFlags::HAS_FREE_LOCAL_REGIONS;
+                flags |= TypeFlags::HAS_RE_INFER;
             }
             RegionKind::RePlaceholder(..) => {
-                flags = flags | TypeFlags::HAS_FREE_REGIONS;
-                flags = flags | TypeFlags::HAS_FREE_LOCAL_REGIONS;
-                flags = flags | TypeFlags::HAS_RE_PLACEHOLDER;
+                flags |= TypeFlags::HAS_FREE_REGIONS;
+                flags |= TypeFlags::HAS_FREE_LOCAL_REGIONS;
+                flags |= TypeFlags::HAS_RE_PLACEHOLDER;
             }
             RegionKind::ReEarlyParam(..) => {
-                flags = flags | TypeFlags::HAS_FREE_REGIONS;
-                flags = flags | TypeFlags::HAS_FREE_LOCAL_REGIONS;
-                flags = flags | TypeFlags::HAS_RE_PARAM;
+                flags |= TypeFlags::HAS_FREE_REGIONS;
+                flags |= TypeFlags::HAS_FREE_LOCAL_REGIONS;
+                flags |= TypeFlags::HAS_RE_PARAM;
             }
             RegionKind::ReLateParam(..) => {
-                flags = flags | TypeFlags::HAS_FREE_REGIONS;
-                flags = flags | TypeFlags::HAS_FREE_LOCAL_REGIONS;
+                flags |= TypeFlags::HAS_FREE_REGIONS;
+                flags |= TypeFlags::HAS_FREE_LOCAL_REGIONS;
             }
             RegionKind::ReStatic => {
-                flags = flags | TypeFlags::HAS_FREE_REGIONS;
+                flags |= TypeFlags::HAS_FREE_REGIONS;
             }
             RegionKind::ReBound(..) => {
-                flags = flags | TypeFlags::HAS_RE_BOUND;
+                flags |= TypeFlags::HAS_RE_BOUND;
             }
             RegionKind::ReErased => {
-                flags = flags | TypeFlags::HAS_RE_ERASED;
+                flags |= TypeFlags::HAS_RE_ERASED;
             }
             RegionKind::ReError(..) => {
-                flags = flags | TypeFlags::HAS_FREE_REGIONS;
-                flags = flags | TypeFlags::HAS_ERROR;
+                flags |= TypeFlags::HAS_FREE_REGIONS;
+                flags |= TypeFlags::HAS_ERROR;
             }
         }
 

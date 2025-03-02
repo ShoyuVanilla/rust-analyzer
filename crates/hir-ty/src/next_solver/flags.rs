@@ -56,7 +56,7 @@ impl FlagComputation {
     }
 
     fn add_flags(&mut self, flags: TypeFlags) {
-        self.flags = self.flags | flags;
+        self.flags |= flags;
     }
 
     /// indicates that `self` refers to something at binding level `binder`

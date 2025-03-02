@@ -94,11 +94,11 @@ pub fn from_assoc_type_id(id: AssocTypeId) -> TypeAliasId {
     ra_salsa::InternKey::from_intern_id(id.0)
 }
 
-pub fn to_opaque_ty_id(id: hir_def::OpaqueTyId) -> OpaqueTyId {
+pub(crate) fn to_opaque_ty_id(id: hir_def::OpaqueTyId) -> OpaqueTyId {
     chalk_ir::OpaqueTyId(ra_salsa::InternKey::as_intern_id(&id))
 }
 
-pub fn from_opaque_ty_id(id: OpaqueTyId) -> hir_def::OpaqueTyId {
+pub(crate) fn from_opaque_ty_id(id: OpaqueTyId) -> hir_def::OpaqueTyId {
     ra_salsa::InternKey::from_intern_id(id.0)
 }
 

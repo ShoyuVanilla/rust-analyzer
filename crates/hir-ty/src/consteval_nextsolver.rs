@@ -53,7 +53,7 @@ pub(crate) fn path_to_const<'g>(
                         path,
                         p
                     );
-                    return None;
+                    None
                 }
             }
         }

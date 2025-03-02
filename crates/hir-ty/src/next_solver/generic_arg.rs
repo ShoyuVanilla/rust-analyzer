@@ -214,11 +214,11 @@ impl rustc_type_ir::inherent::GenericArgs<DbInterner> for GenericArgs {
     }
 
     fn region_at(self, i: usize) -> <DbInterner as rustc_type_ir::Interner>::Region {
-        self.0 .0.get(i).and_then(|g| g.as_region()).unwrap_or_else(|| Region::error())
+        self.0 .0.get(i).and_then(|g| g.as_region()).unwrap_or_else(Region::error)
     }
 
     fn const_at(self, i: usize) -> <DbInterner as rustc_type_ir::Interner>::Const {
-        self.0 .0.get(i).and_then(|g| g.as_const()).unwrap_or_else(|| Const::error())
+        self.0 .0.get(i).and_then(|g| g.as_const()).unwrap_or_else(Const::error)
     }
 
     fn split_closure_args(self) -> rustc_type_ir::ClosureArgsParts<DbInterner> {
@@ -319,7 +319,7 @@ impl<'db> rustc_type_ir::inherent::IrGenericArgs<DbInterner, DbIr<'db>> for Gene
         ir: DbIr<'db>,
         def_id: <DbInterner as rustc_type_ir::Interner>::DefId,
     ) -> <DbInterner as rustc_type_ir::Interner>::GenericArgs {
-        Self::for_item(ir, def_id.into(), |name, index, kind, _| mk_param(index, name, kind))
+        Self::for_item(ir, def_id, |name, index, kind, _| mk_param(index, name, kind))
     }
 
     fn extend_with_error(
@@ -327,7 +327,7 @@ impl<'db> rustc_type_ir::inherent::IrGenericArgs<DbInterner, DbIr<'db>> for Gene
         def_id: <DbInterner as rustc_type_ir::Interner>::DefId,
         original_args: &[<DbInterner as rustc_type_ir::Interner>::GenericArg],
     ) -> <DbInterner as rustc_type_ir::Interner>::GenericArgs {
-        Self::for_item(ir, def_id.into(), |name, index, kind, _| {
+        Self::for_item(ir, def_id, |name, index, kind, _| {
             if let Some(arg) = original_args.get(index as usize) {
                 arg.clone()
             } else {

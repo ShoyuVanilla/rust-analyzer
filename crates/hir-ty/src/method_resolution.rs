@@ -22,7 +22,7 @@ use stdx::never;
 use triomphe::Arc;
 
 use crate::{
-    autoderef::{self, AutoderefKind}, db::HirDatabase, error_lifetime, from_chalk_trait_id, from_foreign_def_id, infer::{unify::InferenceTable, Adjust, Adjustment, OverloadedDeref, PointerCast}, lang_items::is_box, primitive::{FloatTy, IntTy, UintTy}, to_chalk_trait_id, traits::{next_trait_solve, NextTraitSolveResult}, utils::all_super_traits, AdtId, Canonical, CanonicalVarKinds, DebruijnIndex, DynTyExt, ForeignDefId, GenericArgData, Goal, InEnvironment, Interner, Mutability, Scalar, Solution, Substitution, TraitEnvironment, TraitRef, TraitRefExt, Ty, TyBuilder, TyExt, TyKind, TyVariableKind, VariableKind, WhereClause
+    autoderef::{self, AutoderefKind}, db::HirDatabase, error_lifetime, from_chalk_trait_id, from_foreign_def_id, infer::{unify::InferenceTable, Adjust, Adjustment, OverloadedDeref, PointerCast}, lang_items::is_box, primitive::{FloatTy, IntTy, UintTy}, to_chalk_trait_id, traits::{next_trait_solve, NextTraitSolveResult}, utils::all_super_traits, AdtId, Canonical, CanonicalVarKinds, DebruijnIndex, DynTyExt, ForeignDefId, GenericArgData, Goal, InEnvironment, Interner, Mutability, Scalar, Substitution, TraitEnvironment, TraitRef, TraitRefExt, Ty, TyBuilder, TyExt, TyKind, TyVariableKind, VariableKind, WhereClause
 };
 
 /// This is used as a key for indexing impls.

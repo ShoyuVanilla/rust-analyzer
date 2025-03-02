@@ -649,15 +649,15 @@ impl<'db> InferCtxt<'db> {
             .collect();
         vars.extend(
             (0..inner.int_unification_table().len())
-                .map(|i| IntVid::from_usize(i))
+                .map(IntVid::from_usize)
                 .filter(|&vid| inner.int_unification_table().probe_value(vid).is_unknown())
-                .map(|v| Ty::new_int_var(v)),
+                .map(Ty::new_int_var),
         );
         vars.extend(
             (0..inner.float_unification_table().len())
-                .map(|i| FloatVid::from_usize(i))
+                .map(FloatVid::from_usize)
                 .filter(|&vid| inner.float_unification_table().probe_value(vid).is_unknown())
-                .map(|v| Ty::new_float_var(v)),
+                .map(Ty::new_float_var),
         );
         vars
     }

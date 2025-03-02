@@ -305,7 +305,7 @@ struct Generalizer<'me, 'db> {
     has_unconstrained_ty_var: bool,
 }
 
-impl<'db> Generalizer<'_, 'db> {
+impl Generalizer<'_, '_> {
     /// Create an error that corresponds to the term kind in `root_term`
     fn cyclic_term_error(&self) -> TypeError<DbInterner> {
         match self.root_term.clone().kind() {

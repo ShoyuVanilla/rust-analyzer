@@ -11,7 +11,7 @@ use crate::next_solver::infer::InferCtxt;
 use crate::next_solver::infer::snapshot::CombinedSnapshot;
 use crate::next_solver::{Binder, BoundRegion, BoundTy, Const, DbInterner, PlaceholderConst, PlaceholderRegion, PlaceholderTy, Region, Ty};
 
-impl<'db> InferCtxt<'db> {
+impl InferCtxt<'_> {
     /// Replaces all bound variables (lifetimes, types, and constants) bound by
     /// `binder` with placeholder variables in a new universe. This means that the
     /// new placeholders can only be named by inference variables created after

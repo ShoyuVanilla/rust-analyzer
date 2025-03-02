@@ -237,7 +237,7 @@ impl PlaceholderLike for PlaceholderConst {
     }
 
     fn with_updated_universe(&self, ui: rustc_type_ir::UniverseIndex) -> Self {
-        Placeholder { universe: ui, bound: self.bound.clone() }
+        Placeholder { universe: ui, bound: self.bound }
     }
 
     fn new(ui: rustc_type_ir::UniverseIndex, var: rustc_type_ir::BoundVar) -> Self {

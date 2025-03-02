@@ -4,7 +4,7 @@ use syntax::{TextRange, TextSize};
 use test_fixture::WithFixture;
 
 use crate::{
-    db::HirDatabase, mir::MirLowerError, test_db::TestDB, tests::setup_tracing, Interner,
+    db::HirDatabase, mir::MirLowerError, test_db::TestDB, Interner,
     Substitution,
 };
 

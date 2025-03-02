@@ -26,7 +26,7 @@ impl<'a, 'db> OpportunisticVarResolver<'a, 'db> {
     }
 }
 
-impl<'a, 'db> TypeFolder<DbInterner> for OpportunisticVarResolver<'a, 'db> {
+impl TypeFolder<DbInterner> for OpportunisticVarResolver<'_, '_> {
     fn cx(&self) -> DbInterner {
         DbInterner
     }
@@ -72,7 +72,7 @@ impl<'a, 'db> OpportunisticRegionResolver<'a, 'db> {
     }
 }
 
-impl<'a, 'db> TypeFolder<DbInterner> for OpportunisticRegionResolver<'a, 'db> {
+impl TypeFolder<DbInterner> for OpportunisticRegionResolver<'_, '_> {
     fn cx(&self) -> DbInterner {
         DbInterner
     }
@@ -112,7 +112,7 @@ impl<'a, 'db> TypeFolder<DbInterner> for OpportunisticRegionResolver<'a, 'db> {
 /// Full type resolution replaces all type and region variables with
 /// their concrete results. If any variable cannot be replaced (never unified, etc)
 /// then an `Err` result is returned.
-pub fn fully_resolve<'db, T>(infcx: &InferCtxt<'db>, value: T) -> FixupResult<T>
+pub fn fully_resolve<T>(infcx: &InferCtxt<'_>, value: T) -> FixupResult<T>
 where
     T: TypeFoldable<DbInterner>,
 {
@@ -123,7 +123,7 @@ struct FullTypeResolver<'a, 'db> {
     infcx: &'a InferCtxt<'db>,
 }
 
-impl<'a, 'db> FallibleTypeFolder<DbInterner> for FullTypeResolver<'a, 'db> {
+impl FallibleTypeFolder<DbInterner> for FullTypeResolver<'_, '_> {
     type Error = FixupError;
 
     fn cx(&self) -> DbInterner {
@@ -150,18 +150,7 @@ impl<'a, 'db> FallibleTypeFolder<DbInterner> for FullTypeResolver<'a, 'db> {
     }
 
     fn try_fold_region(&mut self, r: Region) -> Result<Region, Self::Error> {
-        match r {
-            /*
-            RegionKind::ReVar(_) => Ok(self
-                .infcx
-                .lexical_region_resolutions
-                .borrow()
-                .as_ref()
-                .expect("region resolution not performed")
-                .resolve_region(self.infcx.tcx, r)),
-            */
-            _ => Ok(r),
-        }
+        Ok(r)
     }
 
     fn try_fold_const(&mut self, c: Const) -> Result<Const, Self::Error> {

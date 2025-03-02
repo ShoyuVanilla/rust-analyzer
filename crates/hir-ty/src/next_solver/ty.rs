@@ -91,7 +91,7 @@ interned_vec!(Tys, Ty);
 
 impl rustc_type_ir::inherent::Tys<DbInterner> for Tys {
     fn inputs(self) -> <DbInterner as rustc_type_ir::Interner>::FnInputTys {
-        Tys::new_from_iter(self.as_slice().split_last().unwrap().1.into_iter().cloned())
+        Tys::new_from_iter(self.as_slice().split_last().unwrap().1.iter().cloned())
     }
 
     fn output(self) -> <DbInterner as rustc_type_ir::Interner>::Ty {

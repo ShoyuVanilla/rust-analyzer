@@ -2544,7 +2544,7 @@ impl Param {
                 }
             }
             Callee::Closure(closure, _) => {
-                let c = db.lookup_intern_closure_def(closure.into());
+                let c = db.lookup_intern_closure_def(closure);
                 let body = db.body(c.parent);
                 if let Expr::Closure { args, .. } = &body[c.root] {
                     if let Pat::Bind { id, .. } = &body[args[self.idx]] {

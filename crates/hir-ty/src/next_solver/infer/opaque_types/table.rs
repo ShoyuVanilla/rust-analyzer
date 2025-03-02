@@ -50,7 +50,7 @@ pub(crate) struct OpaqueTypeTable<'a> {
     undo_log: &'a mut InferCtxtUndoLogs,
 }
 
-impl<'a> OpaqueTypeTable<'a> {
+impl OpaqueTypeTable<'_> {
     #[instrument(skip(self), level = "debug")]
     pub(crate) fn register(
         &mut self,

@@ -70,16 +70,16 @@ use crate::{
 };
 
 #[derive(PartialEq, Eq, Debug, Hash)]
-pub struct ImplTraits {
+pub(crate) struct ImplTraits {
     pub(crate) impl_traits: Arena<ImplTrait>,
 }
 
 #[derive(PartialEq, Eq, Debug, Hash)]
-pub struct ImplTrait {
+pub(crate) struct ImplTrait {
     pub(crate) predicates: Vec<Clause>,
 }
 
-pub type ImplTraitIdx = Idx<ImplTrait>;
+pub(crate) type ImplTraitIdx = Idx<ImplTrait>;
 
 #[derive(Debug, Default)]
 struct ImplTraitLoweringState {
@@ -112,7 +112,7 @@ impl ImplTraitLoweringState {
 }
 
 #[derive(Debug)]
-pub struct TyLoweringContext<'a> {
+pub(crate) struct TyLoweringContext<'a> {
     pub db: &'a dyn HirDatabase,
     resolver: &'a Resolver,
     generics: OnceCell<Option<Generics>>,
@@ -132,7 +132,7 @@ pub struct TyLoweringContext<'a> {
 }
 
 impl<'a> TyLoweringContext<'a> {
-    pub fn new(
+    pub(crate) fn new(
         db: &'a dyn HirDatabase,
         resolver: &'a Resolver,
         types_map: &'a TypesMap,
@@ -141,7 +141,7 @@ impl<'a> TyLoweringContext<'a> {
         Self::new_maybe_unowned(db, resolver, types_map, None, Some(owner))
     }
 
-    pub fn new_maybe_unowned(
+    pub(crate) fn new_maybe_unowned(
         db: &'a dyn HirDatabase,
         resolver: &'a Resolver,
         types_map: &'a TypesMap,
@@ -164,7 +164,7 @@ impl<'a> TyLoweringContext<'a> {
         }
     }
 
-    pub fn with_debruijn<T>(
+    pub(crate) fn with_debruijn<T>(
         &mut self,
         debruijn: DebruijnIndex,
         f: impl FnOnce(&mut TyLoweringContext<'_>) -> T,
@@ -175,7 +175,7 @@ impl<'a> TyLoweringContext<'a> {
         result
     }
 
-    pub fn with_shifted_in<T>(
+    pub(crate) fn with_shifted_in<T>(
         &mut self,
         debruijn: DebruijnIndex,
         f: impl FnOnce(&mut TyLoweringContext<'_>) -> T,
@@ -183,18 +183,18 @@ impl<'a> TyLoweringContext<'a> {
         self.with_debruijn(self.in_binders.shifted_in(debruijn.as_u32()), f)
     }
 
-    pub fn with_impl_trait_mode(self, impl_trait_mode: ImplTraitLoweringMode) -> Self {
+    pub(crate) fn with_impl_trait_mode(self, impl_trait_mode: ImplTraitLoweringMode) -> Self {
         Self { impl_trait_mode: ImplTraitLoweringState::new(impl_trait_mode), ..self }
     }
 
-    pub fn impl_trait_mode(&mut self, impl_trait_mode: ImplTraitLoweringMode) -> &mut Self {
+    pub(crate) fn impl_trait_mode(&mut self, impl_trait_mode: ImplTraitLoweringMode) -> &mut Self {
         self.impl_trait_mode = ImplTraitLoweringState::new(impl_trait_mode);
         self
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-pub enum ImplTraitLoweringMode {
+pub(crate) enum ImplTraitLoweringMode {
     /// `impl Trait` gets lowered into an opaque type that doesn't unify with
     /// anything except itself. This is used in places where values flow 'out',
     /// i.e. for arguments of the function we're currently checking, and return
@@ -215,11 +215,11 @@ pub enum ImplTraitLoweringMode {
 }
 
 impl<'a> TyLoweringContext<'a> {
-    pub fn lower_ty(&mut self, type_ref: TypeRefId) -> Ty {
+    pub(crate) fn lower_ty(&mut self, type_ref: TypeRefId) -> Ty {
         self.lower_ty_ext(type_ref).0
     }
 
-    pub fn lower_const(&mut self, const_ref: &ConstRef, const_type: Ty) -> Const {
+    pub(crate) fn lower_const(&mut self, const_ref: &ConstRef, const_type: Ty) -> Const {
         let Some(owner) = self.owner else { return unknown_const(const_type) };
         const_or_path_to_const(self.db, self.resolver, const_type, const_ref, || self.generics())
     }
@@ -265,7 +265,7 @@ impl<'a> TyLoweringContext<'a> {
                 let lifetime = ref_
                     .lifetime
                     .as_ref()
-                    .map_or_else(|| Region::error(), |lr| self.lower_lifetime(lr));
+                    .map_or_else(Region::error, |lr| self.lower_lifetime(lr));
                 Ty::new_ref(DbInterner, lifetime, inner_ty, lower_mutability(ref_.mutability))
             }
             TypeRef::Placeholder => Ty::new_error(DbInterner, ErrorGuaranteed),
@@ -645,7 +645,7 @@ impl<'a> TyLoweringContext<'a> {
                     None,
                 );
                 let args = GenericArgs::identity_for_item(fake_ir, adt.into());
-                Ty::new_adt(DbInterner, AdtDef::new(adt.into(), self.db), args)
+                Ty::new_adt(DbInterner, AdtDef::new(adt, self.db), args)
             }
 
             TypeNs::AdtId(it) => self.lower_path_inner(resolved_segment, it.into(), infer_args),
@@ -710,7 +710,7 @@ impl<'a> TyLoweringContext<'a> {
                 // that method to optionally take parent `Substitution` as we already know them at
                 // this point (`t.substitution`).
                 let substs = self.substs_from_path_segment(
-                    segment.clone(),
+                    segment,
                     Some(associated_ty.into()),
                     false,
                     None,
@@ -849,7 +849,7 @@ impl<'a> TyLoweringContext<'a> {
         let mut def_toc_iter = def_generics.iter_self_type_or_consts_id();
         let fill_self_param = || {
             if self_param {
-                let self_ty = explicit_self_ty.map(|x| x.into()).unwrap_or_else(ty_error);
+                let self_ty = explicit_self_ty.unwrap_or_else(ty_error);
 
                 if let Some(id) = def_toc_iter.next() {
                     assert!(matches!(id, GenericParamId::TypeParamId(_)));
@@ -883,7 +883,7 @@ impl<'a> TyLoweringContext<'a> {
                     GenericArg::Lifetime(arg) => Some(self.lower_lifetime(arg)),
                     _ => None,
                 })
-                .chain(iter::repeat_with(|| Region::error()))
+                .chain(iter::repeat_with(Region::error))
                 .take(lifetime_params)
             {
                 substs.push(arg.into());
@@ -1495,7 +1495,7 @@ impl<'a> TyLoweringContext<'a> {
         ImplTrait { predicates }
     }
 
-    pub fn lower_lifetime(&self, lifetime: &LifetimeRef) -> Region {
+    pub(crate) fn lower_lifetime(&self, lifetime: &LifetimeRef) -> Region {
         match self.resolver.resolve_lifetime(lifetime) {
             Some(resolution) => match resolution {
                 LifetimeNs::Static => Region::new_static(DbInterner),
@@ -1930,7 +1930,7 @@ pub(crate) fn generic_predicates_for_param_query(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GenericPredicates(Option<Arc<[Clause]>>);
+pub(crate) struct GenericPredicates(Option<Arc<[Clause]>>);
 
 impl ops::Deref for GenericPredicates {
     type Target = [Clause];
@@ -2012,7 +2012,7 @@ where
                         .as_ref()
                         .map(|n| n.symbol().clone())
                         .unwrap_or_else(|| Name::missing().symbol().clone());
-                    let param_ty = Ty::new_param(idx, name).into();
+                    let param_ty = Ty::new_param(idx, name);
                     if explicitly_unsized_tys.contains(&param_ty) {
                         continue;
                     }
@@ -2203,7 +2203,7 @@ fn type_for_adt(db: &dyn HirDatabase, adt: AdtId) -> EarlyBinder<Ty> {
     let fake_ir =
         crate::next_solver::DbIr::new(db, CrateId::from_raw(la_arena::RawIdx::from_u32(0)), None);
     let args = GenericArgs::identity_for_item(fake_ir, adt.into());
-    let ty = Ty::new_adt(DbInterner, AdtDef::new(adt.into(), db), args);
+    let ty = Ty::new_adt(DbInterner, AdtDef::new(adt, db), args);
     EarlyBinder::bind(ty)
 }
 
@@ -2254,7 +2254,7 @@ fn fn_sig_for_enum_variant_constructor(
     }))
 }
 
-pub fn associated_type_by_name_including_super_traits(
+pub(crate) fn associated_type_by_name_including_super_traits(
     db: &dyn HirDatabase,
     trait_ref: TraitRef,
     name: &Name,

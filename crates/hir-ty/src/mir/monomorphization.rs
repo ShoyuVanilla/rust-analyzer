@@ -327,7 +327,7 @@ pub fn monomorphized_mir_body_for_closure_query(
     subst: Substitution,
     trait_env: Arc<crate::TraitEnvironment>,
 ) -> Result<Arc<MirBody>, MirLowerError> {
-    let ClosureLoc { parent: owner, .. } = db.lookup_intern_closure_def(closure.into());
+    let ClosureLoc { parent: owner, .. } = db.lookup_intern_closure_def(closure);
     let generics = owner.as_generic_def_id(db.upcast()).map(|g_def| generics(db.upcast(), g_def));
     let filler = &mut Filler { db, subst: &subst, trait_env, generics, owner };
     let body = db.mir_body_for_closure(closure)?;

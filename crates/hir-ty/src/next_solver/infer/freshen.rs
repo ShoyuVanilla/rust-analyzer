@@ -102,7 +102,7 @@ impl<'a, 'db> TypeFreshener<'a, 'db> {
     }
 }
 
-impl<'a, 'db> TypeFolder<DbInterner> for TypeFreshener<'a, 'db> {
+impl TypeFolder<DbInterner> for TypeFreshener<'_, '_> {
     fn cx(&self) -> DbInterner {
         DbInterner
     }
@@ -178,7 +178,7 @@ impl<'a, 'db> TypeFolder<DbInterner> for TypeFreshener<'a, 'db> {
     }
 }
 
-impl<'a, 'db> TypeFreshener<'a, 'db> {
+impl TypeFreshener<'_, '_> {
     // This is separate from `fold_ty` to keep that method small and inlinable.
     #[inline(never)]
     fn fold_infer_ty(&mut self, v: InferTy) -> Option<Ty> {
@@ -191,7 +191,7 @@ impl<'a, 'db> TypeFreshener<'a, 'db> {
                     .known()
                     .ok_or_else(|| InferTy::TyVar(inner.type_variables().root_var(v)));
                 drop(inner);
-                Some(self.freshen_ty(input, |n| Ty::new_fresh(n)))
+                Some(self.freshen_ty(input, Ty::new_fresh))
             }
 
             InferTy::IntVar(v) => {
@@ -205,7 +205,7 @@ impl<'a, 'db> TypeFreshener<'a, 'db> {
                     }
                 };
                 drop(inner);
-                Some(self.freshen_ty(input, |n| Ty::new_fresh_int(n)))
+                Some(self.freshen_ty(input, Ty::new_fresh_int))
             }
 
             InferTy::FloatVar(v) => {
@@ -218,7 +218,7 @@ impl<'a, 'db> TypeFreshener<'a, 'db> {
                     }
                 };
                 drop(inner);
-                Some(self.freshen_ty(input, |n| Ty::new_fresh_float(n)))
+                Some(self.freshen_ty(input, Ty::new_fresh_float))
             }
 
             InferTy::FreshTy(ct) | InferTy::FreshIntTy(ct) | InferTy::FreshFloatTy(ct) => {

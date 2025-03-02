@@ -192,7 +192,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
                 _ => None,
             }
         });
-        Ok(id.map(|id| GenericDefId::TypeAliasId(id)))
+        Ok(id.map(GenericDefId::TypeAliasId))
     }
 
     fn is_transmutable(

@@ -450,8 +450,7 @@ impl InferenceContext<'_> {
                     ClosureKind::Closure | ClosureKind::Async => {
                         let closure_id = self
                             .db
-                            .intern_closure_def(ClosureLoc { parent: self.owner, root: tgt_expr })
-                            .into();
+                            .intern_closure_def(ClosureLoc { parent: self.owner, root: tgt_expr });
                         let closure_ty = TyKind::Closure(
                             to_chalk_closure_id(closure_id),
                             TyBuilder::subst_for_closure(self.db, self.owner, sig_ty.clone()),
@@ -1214,7 +1213,7 @@ impl InferenceContext<'_> {
         // Use the first type parameter as the output type of future.
         // existential type AsyncBlockImplTrait<InnerType>: Future<Output = InnerType>
         let impl_trait_id = OpaqueTyLoc::AsyncBlockTypeImplTrait(self.owner, tgt_expr);
-        let opaque_ty_id = self.db.intern_opaque_ty(impl_trait_id).into();
+        let opaque_ty_id = self.db.intern_opaque_ty(impl_trait_id);
         TyKind::OpaqueType(to_opaque_ty_id(opaque_ty_id), Substitution::from1(Interner, inner_ty))
             .intern(Interner)
     }

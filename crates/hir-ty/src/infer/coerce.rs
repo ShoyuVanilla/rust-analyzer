@@ -19,7 +19,7 @@ use crate::{
     autoderef::{Autoderef, AutoderefKind}, db::HirDatabase, infer::{
         Adjust, Adjustment, AutoBorrow, InferOk, InferenceContext, OverloadedDeref, PointerCast,
         TypeError, TypeMismatch,
-    }, traits::{next_trait_solve, NextTraitSolveResult}, utils::ClosureSubst, Canonical, DomainGoal, FnAbi, FnPointer, FnSig, Guidance, InEnvironment, Interner, Lifetime, Solution, Substitution, TraitEnvironment, Ty, TyBuilder, TyExt
+    }, traits::{next_trait_solve, NextTraitSolveResult}, utils::ClosureSubst, Canonical, DomainGoal, FnAbi, FnPointer, FnSig, InEnvironment, Interner, Lifetime, Substitution, TraitEnvironment, Ty, TyBuilder, TyExt
 };
 
 use super::unify::InferenceTable;

@@ -29,7 +29,7 @@ pub struct FnMutDelegate<'a> {
     pub consts: &'a mut (dyn FnMut(BoundVar) -> Const + 'a),
 }
 
-impl<'a> BoundVarReplacerDelegate for FnMutDelegate<'a> {
+impl BoundVarReplacerDelegate for FnMutDelegate<'_> {
     fn replace_region(&mut self, br: BoundRegion) -> Region {
         (self.regions)(br)
     }

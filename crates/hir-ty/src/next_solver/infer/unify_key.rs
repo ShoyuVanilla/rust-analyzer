@@ -167,7 +167,7 @@ impl UnifyValue for ConstVariableValue {
                 // universe is the minimum of the two universes, because that is
                 // the one which contains the fewest names in scope.
                 let universe = cmp::min(*universe1, *universe2);
-                Ok(ConstVariableValue::Unknown { origin: origin.clone(), universe })
+                Ok(ConstVariableValue::Unknown { origin: *origin, universe })
             }
         }
     }

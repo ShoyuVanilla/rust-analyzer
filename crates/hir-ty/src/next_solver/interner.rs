@@ -760,7 +760,7 @@ impl<'a> DbIr<'a> {
         DbIr { db, krate, block }
     }
 }
-impl<'cx> RustIr for DbIr<'cx> {
+impl RustIr for DbIr<'_> {
     type Interner = DbInterner;
 
     fn interner(self) -> Self::Interner {
@@ -1343,7 +1343,7 @@ impl<'cx> RustIr for DbIr<'cx> {
         let target = self
             .db
             .lang_item(self.krate, lang_item)
-            .expect(&format!("Lang item {lang_item:?} required but not found."));
+            .unwrap_or_else(|| panic!("Lang item {lang_item:?} required but not found."));
         match target {
             hir_def::lang_item::LangItemTarget::EnumId(enum_id) => enum_id.into(),
             hir_def::lang_item::LangItemTarget::Function(function_id) => function_id.into(),
@@ -1684,10 +1684,10 @@ impl<'cx> RustIr for DbIr<'cx> {
 
         let db = self.db;
 
-        let trait_ref = impl_trait_query(db, impl_id)
+        
+        impl_trait_query(db, impl_id)
             // ImplIds for impls where the trait ref can't be resolved should never reach trait solving
-            .expect("invalid impl passed to trait solver");
-        trait_ref
+            .expect("invalid impl passed to trait solver")
     }
 
     fn impl_polarity(
@@ -2003,7 +2003,7 @@ pub mod tls {
         DB.set(
             &(unsafe { std::mem::transmute::<_, &'static dyn crate::db::HirDatabase>(db) }
                 as *const dyn crate::db::HirDatabase),
-            move || f(),
+            f,
         )
     }
 

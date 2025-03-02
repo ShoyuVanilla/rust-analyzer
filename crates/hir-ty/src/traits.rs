@@ -3,7 +3,7 @@
 use core::fmt;
 use std::env::var;
 
-use chalk_ir::{fold::TypeFoldable, DebruijnIndex, GoalData, UCanonical};
+use chalk_ir::{fold::TypeFoldable, DebruijnIndex, GoalData};
 use chalk_recursive::Cache;
 use chalk_solve::{logging_db::LoggingRustIrDatabase, rust_ir, Solver};
 
@@ -146,7 +146,7 @@ pub(crate) fn trait_solve_query(
     let check = false;
     match check {
         true => {
-            dbg!(&u_canonical);
+            &u_canonical;
             let next_solver_res = solve_nextsolver(db, krate, block, &u_canonical);
             let chalk_res = solve(db, krate, block, &u_canonical);
             match (&chalk_res, &next_solver_res) {
