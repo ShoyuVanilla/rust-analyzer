@@ -21,8 +21,17 @@ use itertools::{Itertools, izip};
 use syntax::{
     AstNode, NodeOrToken, SyntaxKind,
     ast::{
-        self, HasArgList, HasGenericArgs, Pat, PathExpr, edit::IndentLevel, edit_in_place::Indent,
+        // TODO: migrate indent
+        self,
+        HasArgList,
+        HasGenericArgs,
+        Pat,
+        PathExpr,
+        edit::IndentLevel,
+        edit_in_place::Indent,
+        syntax_factory::SyntaxFactory,
     },
+    syntax_editor::SyntaxEditor,
     ted,
 };
 
@@ -237,14 +246,9 @@ pub(crate) fn inline_call(acc: &mut Assists, ctx: &AssistContext<'_>) -> Option<
         label,
         syntax.text_range(),
         |builder| {
+            let mut editor = builder.make_editor(&syntax);
             let replacement = inline(&ctx.sema, file_id, function, &fn_body, &params, &call_info);
-            builder.replace_ast(
-                match call_info.node {
-                    ast::CallableExpr::Call(it) => ast::Expr::CallExpr(it),
-                    ast::CallableExpr::MethodCall(it) => ast::Expr::MethodCallExpr(it),
-                },
-                replacement,
-            );
+            editor.replace(call_info.node.syntax(), replacement.syntax());
         },
     )
 }
@@ -323,19 +327,17 @@ fn inline(
     CallInfo { node, arguments, generic_arg_list, krate }: &CallInfo,
 ) -> ast::Expr {
     let file_id = sema.hir_file_for(fn_body.syntax());
-    let mut body = if let Some(macro_file) = file_id.macro_file() {
+    let body = if let Some(macro_file) = file_id.macro_file() {
         cov_mark::hit!(inline_call_defined_in_macro);
         let span_map = sema.db.expansion_span_map(macro_file);
         let body_prettified =
             prettify_macro_expansion(sema.db, fn_body.syntax().clone(), &span_map, *krate);
-        if let Some(body) = ast::BlockExpr::cast(body_prettified) {
-            body
-        } else {
-            fn_body.clone_for_update()
-        }
+        if let Some(body) = ast::BlockExpr::cast(body_prettified) { body } else { fn_body.clone() }
     } else {
-        fn_body.clone_for_update()
+        fn_body.clone()
     };
+    let mut editor = SyntaxEditor::new(fn_body.syntax().clone());
+    let make = SyntaxFactory::new();
     let usages_for_locals = |local| {
         Definition::Local(local)
             .usages(sema)
@@ -373,11 +375,7 @@ fn inline(
 
     if function.self_param(sema.db).is_some() {
         let this = || {
-            make::name_ref("this")
-                .syntax()
-                .clone_for_update()
-                .first_token()
-                .expect("NameRef should have had a token.")
+            make.name_ref("this").syntax().first_token().expect("NameRef should have had a token.")
         };
         if let Some(self_local) = params[0].2.as_local(sema.db) {
             usages_for_locals(self_local)
@@ -386,7 +384,7 @@ fn inline(
                     _ => None,
                 })
                 .for_each(|usage| {
-                    ted::replace(usage, this());
+                    editor.replace(usage, this());
                 });
         }
     }
@@ -406,7 +404,7 @@ fn inline(
                     .find(|tok| tok.kind() == SyntaxKind::SELF_TYPE_KW)
                 {
                     let replace_with = t.clone_subtree().syntax().clone_for_update();
-                    ted::replace(self_tok, replace_with);
+                    editor.replace(self_tok, replace_with);
                 }
             }
         }
@@ -440,6 +438,7 @@ fn inline(
                 let file_id = sema.hir_file_for(param_ty.syntax());
                 if let Some(macro_file) = file_id.macro_file() {
                     let span_map = sema.db.expansion_span_map(macro_file);
+                    // TODO: migrate this
                     let param_ty_prettified = prettify_macro_expansion(
                         sema.db,
                         param_ty.syntax().clone(),
@@ -465,11 +464,11 @@ fn inline(
                         (None, None) => {}
                         // mut self => let mut this = obj
                         (None, Some(_)) => {
-                            this_pat = make::ident_pat(false, true, make::name("this"));
+                            this_pat = make.ident_pat(false, true, make::name("this"));
                         }
                         // &self => let this = &obj
                         (Some(_), None) => {
-                            expr = make::expr_ref(expr, false);
+                            expr = make.expr_ref(expr, false);
                         }
                         // let foo = &mut X; &mut self => let this = &mut obj
                         // let mut foo = X;  &mut self => let this = &mut *obj (reborrow)
@@ -478,19 +477,16 @@ fn inline(
                                 .type_of_expr(&expr)
                                 .map(|ty| ty.original.is_mutable_reference());
                             expr = if let Some(true) = should_reborrow {
-                                make::expr_reborrow(expr)
+                                make.expr_reborrow(expr).into()
                             } else {
-                                make::expr_ref(expr, true)
+                                make.expr_ref(expr, true)
                             };
                         }
                     }
                 };
-                let_stmts
-                    .push(make::let_stmt(this_pat.into(), ty, Some(expr)).clone_for_update().into())
+                let_stmts.push(make.let_stmt(this_pat.into(), ty, Some(expr)).into())
             } else {
-                let_stmts.push(
-                    make::let_stmt(pat.clone(), ty, Some(expr.clone())).clone_for_update().into(),
-                );
+                let_stmts.push(make.let_stmt(pat.clone(), ty, Some(expr.clone())).into());
             }
         };
 
@@ -501,12 +497,13 @@ fn inline(
             continue;
         }
 
-        let inline_direct = |usage, replacement: &ast::Expr| {
+        let mut inline_direct = |usage, replacement: &ast::Expr| {
             if let Some(field) = path_expr_as_record_field(usage) {
                 cov_mark::hit!(inline_call_inline_direct_field);
+                // TODO: migrate this
                 field.replace_expr(replacement.clone_for_update());
             } else {
-                ted::replace(usage.syntax(), replacement.syntax().clone_for_update());
+                editor.replace(usage.syntax(), replacement.syntax().clone_for_update());
             }
         };
 
@@ -537,9 +534,15 @@ fn inline(
         }
     }
 
+    let edit = editor.finish();
+    let mut body: ast::BlockExpr = AstNode::cast(edit.new_root().clone_for_update()).unwrap();
+
+    // TODO: we need new `SyntaxFactory` here
+
     if let Some(generic_arg_list) = generic_arg_list.clone() {
         if let Some((target, source)) = &sema.scope(node.syntax()).zip(sema.scope(fn_body.syntax()))
         {
+            // TODO: migrate this
             PathTransform::function_call(target, source, function, generic_arg_list)
                 .apply(body.syntax());
         }
@@ -548,7 +551,7 @@ fn inline(
     let is_async_fn = function.is_async(sema.db);
     if is_async_fn {
         cov_mark::hit!(inline_call_async_fn);
-        body = make::async_move_block_expr(body.statements(), body.tail_expr()).clone_for_update();
+        body = make.async_move_block_expr(body.statements(), body.tail_expr());
 
         // Arguments should be evaluated outside the async block, and then moved into it.
         if !let_stmts.is_empty() {
@@ -572,7 +575,7 @@ fn inline(
     let no_stmts = body.statements().next().is_none();
     match body.tail_expr() {
         Some(expr) if matches!(expr, ast::Expr::ClosureExpr(_)) && no_stmts => {
-            make::expr_paren(expr).clone_for_update()
+            make.expr_paren(expr).into()
         }
         Some(expr) if !is_async_fn && no_stmts => expr,
         _ => match node
@@ -582,7 +585,7 @@ fn inline(
             .and_then(|bin_expr| bin_expr.lhs())
         {
             Some(lhs) if lhs.syntax() == node.syntax() => {
-                make::expr_paren(ast::Expr::BlockExpr(body)).clone_for_update()
+                make.expr_paren(ast::Expr::BlockExpr(body)).into()
             }
             _ => ast::Expr::BlockExpr(body),
         },
