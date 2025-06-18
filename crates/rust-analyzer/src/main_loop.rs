@@ -1010,7 +1010,13 @@ impl GlobalState {
 
     fn handle_flycheck_msg(&mut self, message: FlycheckMessage) {
         match message {
-            FlycheckMessage::AddDiagnostic { id, workspace_root, diagnostic, package_id } => {
+            FlycheckMessage::AddDiagnostic {
+                id,
+                generation,
+                workspace_root,
+                diagnostic,
+                package_id_and_generation,
+            } => {
                 let snap = self.snapshot();
                 let diagnostics = crate::diagnostics::to_proto::map_rust_diagnostic_to_lsp(
                     &self.config.diagnostics_map(None),
@@ -1022,7 +1028,8 @@ impl GlobalState {
                     match url_to_file_id(&self.vfs.read().0, &diag.url) {
                         Ok(Some(file_id)) => self.diagnostics.add_check_diagnostic(
                             id,
-                            &package_id,
+                            generation,
+                            &package_id_and_generation,
                             file_id,
                             diag.diagnostic,
                             diag.fix,

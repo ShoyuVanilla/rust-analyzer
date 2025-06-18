@@ -855,11 +855,14 @@ impl GlobalState {
                 invocation_strategy.clone()
             }
         };
+        let next_gen =
+            self.flycheck.iter().map(|f| f.generation().succ()).max().unwrap_or_default();
 
         self.flycheck = match invocation_strategy {
             crate::flycheck::InvocationStrategy::Once => {
                 vec![FlycheckHandle::spawn(
                     0,
+                    next_gen,
                     sender,
                     config,
                     None,
@@ -898,6 +901,7 @@ impl GlobalState {
                     .map(|(id, (root, manifest_path), sysroot_root)| {
                         FlycheckHandle::spawn(
                             id,
+                            next_gen,
                             sender.clone(),
                             config.clone(),
                             sysroot_root,

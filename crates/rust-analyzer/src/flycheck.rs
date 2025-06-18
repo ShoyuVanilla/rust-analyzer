@@ -1,12 +1,13 @@
 //! Flycheck provides the functionality needed to run `cargo check` to provide
 //! LSP diagnostics based on the output of the command.
 
-use std::{fmt, io, process::Command, time::Duration};
+use std::{cmp::Ordering, fmt, io, process::Command, time::Duration, u32, usize};
 
 use cargo_metadata::PackageId;
 use crossbeam_channel::{Receiver, Sender, select_biased, unbounded};
 use ide_db::FxHashSet;
 use itertools::Itertools;
+use parking_lot::Mutex;
 use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
 use rustc_hash::FxHashMap;
 use serde::Deserialize as _;
@@ -127,29 +128,43 @@ pub(crate) struct FlycheckHandle {
     sender: Sender<StateChange>,
     _thread: stdx::thread::JoinHandle,
     id: usize,
+    generation: Mutex<Generation>,
 }
 
 impl FlycheckHandle {
     pub(crate) fn spawn(
         id: usize,
+        generation: Generation,
         sender: Sender<FlycheckMessage>,
         config: FlycheckConfig,
         sysroot_root: Option<AbsPathBuf>,
         workspace_root: AbsPathBuf,
         manifest_path: Option<AbsPathBuf>,
     ) -> FlycheckHandle {
-        let actor =
-            FlycheckActor::new(id, sender, config, sysroot_root, workspace_root, manifest_path);
+        let actor = FlycheckActor::new(
+            id,
+            generation,
+            sender,
+            config,
+            sysroot_root,
+            workspace_root,
+            manifest_path,
+        );
         let (sender, receiver) = unbounded::<StateChange>();
         let thread =
             stdx::thread::Builder::new(stdx::thread::ThreadIntent::Worker, format!("Flycheck{id}"))
                 .spawn(move || actor.run(receiver))
                 .expect("failed to spawn thread");
-        FlycheckHandle { id, sender, _thread: thread }
+        FlycheckHandle { id, generation: Mutex::new(generation), sender, _thread: thread }
     }
 
     /// Schedule a re-start of the cargo check worker to do a workspace wide check.
     pub(crate) fn restart_workspace(&self, saved_file: Option<AbsPathBuf>) {
+        let generation = {
+            let mut generation = self.generation.lock();
+            *generation = generation.succ();
+            *generation
+        };
         self.sender.send(StateChange::Restart { package: None, saved_file, target: None }).unwrap();
     }
 
@@ -168,15 +183,41 @@ impl FlycheckHandle {
     pub(crate) fn id(&self) -> usize {
         self.id
     }
+
+    pub(crate) fn generation(&self) -> Generation {
+        *self.generation.lock()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub(crate) struct Generation(u32);
+
+impl Generation {
+    pub(crate) fn succ(self) -> Self {
+        Generation(self.0.wrapping_add(1))
+    }
+}
+
+impl Ord for Generation {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.0.wrapping_sub(other.0) as i64).cmp(&0)
+    }
+}
+
+impl PartialOrd for Generation {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 pub(crate) enum FlycheckMessage {
     /// Request adding a diagnostic with fixes included to a file
     AddDiagnostic {
         id: usize,
+        generation: Generation,
         workspace_root: Arc<AbsPathBuf>,
         diagnostic: Diagnostic,
-        package_id: Option<Arc<PackageId>>,
+        package_id_and_generation: Option<(Arc<PackageId>, Generation)>,
     },
 
     /// Request clearing all outdated diagnostics.
@@ -197,9 +238,16 @@ pub(crate) enum FlycheckMessage {
 impl fmt::Debug for FlycheckMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FlycheckMessage::AddDiagnostic { id, workspace_root, diagnostic, package_id } => f
+            FlycheckMessage::AddDiagnostic {
+                id,
+                generation,
+                workspace_root,
+                diagnostic,
+                package_id_and_generation: package_id,
+            } => f
                 .debug_struct("AddDiagnostic")
                 .field("id", id)
+                .field("generation", generation)
                 .field("workspace_root", workspace_root)
                 .field("package_id", package_id)
                 .field("diagnostic_code", &diagnostic.code.as_ref().map(|it| &it.code))
@@ -234,6 +282,8 @@ enum StateChange {
 struct FlycheckActor {
     /// The workspace id of this flycheck instance.
     id: usize,
+    generation: Generation,
+    generation_per_package: FxHashMap<Arc<PackageId>, Generation>,
 
     sender: Sender<FlycheckMessage>,
     config: FlycheckConfig,
@@ -272,6 +322,7 @@ pub(crate) const SAVED_FILE_PLACEHOLDER: &str = "$saved_file";
 impl FlycheckActor {
     fn new(
         id: usize,
+        generation: Generation,
         sender: Sender<FlycheckMessage>,
         config: FlycheckConfig,
         sysroot_root: Option<AbsPathBuf>,
@@ -281,6 +332,8 @@ impl FlycheckActor {
         tracing::info!(%id, ?workspace_root, "Spawning flycheck");
         FlycheckActor {
             id,
+            generation,
+            generation_per_package: Default::default(),
             sender,
             config,
             sysroot_root,
@@ -325,6 +378,9 @@ impl FlycheckActor {
                             continue 'event;
                         }
                     }
+
+                    self.generation = self.generation.succ();
+                    self.generation_per_package.clear();
 
                     let Some(command) =
                         self.check_command(package.as_deref(), saved_file.as_deref(), target)
@@ -436,9 +492,20 @@ impl FlycheckActor {
                                 package_id: None,
                             });
                         }
+
+                        let package_id_and_generation = if let Some(package_id) = package_id {
+                            let generation =
+                                self.generation_per_package.entry(package_id.clone()).or_default();
+                            *generation = generation.succ();
+                            Some((package_id, *generation))
+                        } else {
+                            None
+                        };
+
                         self.send(FlycheckMessage::AddDiagnostic {
                             id: self.id,
-                            package_id,
+                            generation: self.generation,
+                            package_id_and_generation,
                             workspace_root: self.root.clone(),
                             diagnostic,
                         });
