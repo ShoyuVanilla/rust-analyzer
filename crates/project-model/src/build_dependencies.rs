@@ -20,7 +20,9 @@ use toolchain::Tool;
 
 use crate::{
     CargoConfig, CargoFeatures, CargoWorkspace, InvocationStrategy, ManifestPath, Package, Sysroot,
-    TargetKind, utf8_stdout,
+    TargetKind,
+    toolchain_info::{QueryConfig, version},
+    utf8_stdout,
 };
 
 /// Output of the build script and proc-macro building steps for a workspace.
@@ -441,6 +443,27 @@ impl WorkspaceBuildScripts {
                 }
 
                 cmd.arg("--keep-going");
+
+                // If [`--compile-time-deps` flag](https://github.com/rust-lang/cargo/issues/14434) is
+                // available in current toolchain's cargo, use it to build compile time deps only.
+                const COMP_TIME_DEPS_MIN_TOOLCHAIN_VERSION: semver::Version = semver::Version {
+                    major: 1,
+                    minor: 90,
+                    patch: 0,
+                    pre: semver::Prerelease::EMPTY,
+                    build: semver::BuildMetadata::EMPTY,
+                };
+
+                let query_config = QueryConfig::Cargo(sysroot, manifest_path);
+                let toolchain = version::get(query_config, &config.extra_env).ok().flatten();
+                let cargo_comp_time_deps_available =
+                    toolchain.is_some_and(|v| v >= COMP_TIME_DEPS_MIN_TOOLCHAIN_VERSION);
+
+                if cargo_comp_time_deps_available {
+                    cmd.env("__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS", "nightly");
+                    cmd.arg("-Zunstable-options");
+                    cmd.arg("--compile-time-deps");
+                }
 
                 cmd
             }
