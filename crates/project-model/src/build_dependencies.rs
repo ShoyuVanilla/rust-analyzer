@@ -395,7 +395,13 @@ impl WorkspaceBuildScripts {
                 cmd
             }
             _ => {
-                let mut cmd = sysroot.tool(Tool::Cargo, current_dir, &config.extra_env);
+                let cargo_bin_for_test = std::env::var("CARGO_BIN_FOR_TEST").ok();
+
+                let mut cmd = if let Some(s) = &cargo_bin_for_test {
+                    toolchain::command(s, current_dir, &config.extra_env)
+                } else {
+                    sysroot.tool(Tool::Cargo, current_dir, &config.extra_env)
+                };
 
                 cmd.args(["check", "--quiet", "--workspace", "--message-format=json"]);
                 cmd.args(&config.extra_args);
@@ -456,8 +462,7 @@ impl WorkspaceBuildScripts {
 
                 let query_config = QueryConfig::Cargo(sysroot, manifest_path);
                 let toolchain = version::get(query_config, &config.extra_env).ok().flatten();
-                let cargo_comp_time_deps_available =
-                    toolchain.is_some_and(|v| v >= COMP_TIME_DEPS_MIN_TOOLCHAIN_VERSION);
+                let cargo_comp_time_deps_available = cargo_bin_for_test.is_some();
 
                 if cargo_comp_time_deps_available {
                     cmd.env("__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS", "nightly");
