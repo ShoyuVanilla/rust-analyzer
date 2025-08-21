@@ -10,6 +10,7 @@ mod generic_arg;
 pub mod generics;
 pub mod infer;
 //mod infer_new;
+pub mod analyse;
 pub mod interner;
 mod ir_print;
 pub mod mapping;

@@ -308,6 +308,22 @@ pub fn next_trait_solve_in_ctxt<'db, 'a>(
     res
 }
 
+pub fn evaluate_root_goal_for_proof_tree_in_ctxt<'db, 'a>(
+    infer_ctxt: &'a InferCtxt<'db>,
+    goal: crate::next_solver::Goal<'db, crate::next_solver::Predicate<'db>>,
+) -> crate::next_solver::Goal<'db, crate::next_solver::Predicate<'db>> {
+    tracing::info!(?goal);
+
+    let context = <&SolverContext<'db>>::from(infer_ctxt);
+
+    let res = context.evaluate_root_goal_for_proof_tree(goal, Span::dummy()).1.uncanonicalized_goal;
+    let res = infer_ctxt.resolve_vars_if_possible(res);
+
+    tracing::debug!("solve_nextsolver({:?}) => {:?}", goal, res);
+
+    res
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FnTrait {
     // Warning: Order is important. If something implements `x` it should also implement

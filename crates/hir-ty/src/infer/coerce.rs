@@ -5,10 +5,17 @@
 //! See <https://doc.rust-lang.org/nomicon/coercions.html> and
 //! `rustc_hir_analysis/check/coercion.rs`.
 
-use std::iter;
+use std::{iter, ops::ControlFlow};
 
 use chalk_ir::{BoundVar, Goal, Mutability, TyKind, TyVariableKind, cast::Cast};
-use hir_def::{hir::ExprId, lang_item::LangItem};
+use hir_def::{
+    hir::ExprId,
+    lang_item::{LangItem, LangItemTarget},
+};
+use rustc_type_ir::{
+    inherent::{GenericArgs, IntoKind},
+    solve::Certainty,
+};
 use stdx::always;
 use triomphe::Arc;
 
@@ -21,6 +28,7 @@ use crate::{
         Adjust, Adjustment, AutoBorrow, InferOk, InferenceContext, OverloadedDeref, PointerCast,
         TypeError, TypeMismatch,
     },
+    next_solver::{SolverDefId, analyse::ProofTreeVisitor, infer::InferCtxt},
     traits::NextTraitSolveResult,
     utils::ClosureSubst,
 };
@@ -796,4 +804,67 @@ pub(super) fn auto_deref_adjust_steps(autoderef: &Autoderef<'_, '_>) -> Vec<Adju
         .zip(targets)
         .map(|(autoderef, target)| Adjustment { kind: Adjust::Deref(autoderef), target })
         .collect()
+}
+
+struct CoerceVisitor<'a, 'db> {
+    infcx: &'a InferCtxt<'db>,
+    table: &'a mut InferenceTable<'db>,
+}
+
+impl<'db> ProofTreeVisitor<'db> for CoerceVisitor<'_, 'db> {
+    type Result = ControlFlow<()>;
+
+    fn visit_goal(
+        &mut self,
+        goal: &crate::next_solver::analyse::InspectGoal<'_, 'db>,
+    ) -> Self::Result {
+        let Some(pred) = goal.goal().predicate.as_trait_clause() else {
+            return ControlFlow::Continue(());
+        };
+
+        let Some(unsize) = hir_def::lang_item::lang_item(
+            self.infcx.interner.db,
+            self.table.trait_env.krate,
+            LangItem::Unsize,
+        )
+        .and_then(LangItemTarget::as_trait) else {
+            return ControlFlow::Continue(());
+        };
+        let Some(coerce_unsized) = hir_def::lang_item::lang_item(
+            self.infcx.interner.db,
+            self.table.trait_env.krate,
+            LangItem::CoerceUnsized,
+        )
+        .and_then(LangItemTarget::as_trait) else {
+            return ControlFlow::Continue(());
+        };
+
+        if matches!(pred.def_id(), SolverDefId::TraitId(trait_) if trait_ == unsize || trait_ == coerce_unsized)
+        {
+            return ControlFlow::Continue(());
+        }
+
+        match goal.result() {
+            Ok(Certainty::Yes) => ControlFlow::Continue(()),
+            Err(_) => ControlFlow::Break(()),
+            Ok(Certainty::Maybe(_)) => {
+                if pred.def_id() == SolverDefId::TraitId(unsize)
+                    && let rustc_type_ir::TyKind::Dynamic(..) =
+                        pred.skip_binder().trait_ref.args.type_at(1).kind()
+                    // FIXME: rustc checks whether the given inference var is sized here but it's
+                    // not doable for now because we are still using chalk solver in some places
+                    // here
+                    && let rustc_type_ir::Infer(..) = pred.self_ty().skip_binder().kind()
+                {
+                    ControlFlow::Continue(())
+                } else if let Some(cand) = goal.unique_applicable_candidate()
+                    && cand.shallow_certainty() == Certainty::Yes
+                {
+                    cand.visit_nested_no_probe(self)
+                } else {
+                    ControlFlow::Break(())
+                }
+            }
+        }
+    }
 }

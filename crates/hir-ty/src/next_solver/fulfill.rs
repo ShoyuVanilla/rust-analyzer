@@ -227,3 +227,9 @@ pub enum NextSolverError<'db> {
     Ambiguity(PredicateObligation<'db>),
     Overflow(PredicateObligation<'db>),
 }
+
+impl<'db> NextSolverError<'db> {
+    pub fn is_true_error(&self) -> bool {
+        matches!(self, NextSolverError::TrueError(_))
+    }
+}
