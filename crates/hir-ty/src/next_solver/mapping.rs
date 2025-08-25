@@ -440,6 +440,7 @@ impl<'db> ChalkToNextSolver<'db, Region<'db>> for chalk_ir::Lifetime<Interner> {
                     ))
                 }
                 chalk_ir::LifetimeData::Placeholder(placeholder_index) => {
+                    dbg!(&placeholder_index);
                     rustc_type_ir::RegionKind::RePlaceholder(PlaceholderRegion::new_anon(
                         rustc_type_ir::UniverseIndex::from_u32(placeholder_index.ui.counter as u32),
                         rustc_type_ir::BoundVar::from_u32(placeholder_index.idx as u32),

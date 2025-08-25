@@ -1551,8 +1551,42 @@ pub mod iter {
                 loop {}
             }
         }
+
+        pub struct Chain<A, B> {
+            a: Option<A>,
+            b: Option<B>,
+        }
+        impl<A, B> Iterator for Chain<A, B>
+        where
+            A: Iterator,
+            B: Iterator<Item = A::Item>,
+        {
+            type Item = A::Item;
+
+            #[inline]
+            fn next(&mut self) -> Option<A::Item> {
+                loop {}
+            }
+        }
+
+        pub struct Flatten<I: Iterator<Item: IntoIterator>> {
+            inner: (I, <I::Item as IntoIterator>::IntoIter),
+        }
+        impl<I, U> Iterator for Flatten<I>
+        where
+            I: Iterator<Item: IntoIterator<IntoIter = U, Item = U::Item>>,
+            U: Iterator,
+        {
+            type Item = U::Item;
+
+            #[inline]
+            fn next(&mut self) -> Option<U::Item> {
+                loop {}
+            }
+        }
+
     }
-    pub use self::adapters::{FilterMap, Take};
+    pub use self::adapters::{Chain, FilterMap, Flatten, Take};
 
     mod sources {
         mod repeat {
@@ -1597,16 +1631,36 @@ pub mod iter {
                     self
                 }
                 // region:iterators
+                fn chain<U>(self, other: U) -> crate::iter::Chain<Self, <U as IntoIterator>::IntoIter>
+                where
+                    Self: Sized,
+                    U: IntoIterator<Item = Self::Item>,
+                {
+                    loop {}
+                }
                 fn take(self, n: usize) -> crate::iter::Take<Self>
                 where
                     Self: Sized,
                 {
                     loop {}
                 }
+                fn for_each<F>(self, _: F)
+                where
+                    Self: Sized,
+                    F: FnMut(Self::Item),
+                {
+                }
                 fn filter_map<B, F>(self, _f: F) -> crate::iter::FilterMap<Self, F>
                 where
                     Self: Sized,
                     F: FnMut(Self::Item) -> Option<B>,
+                {
+                    loop {}
+                }
+                fn flatten(self) -> Flatten<Self>
+                where
+                    Self: Sized,
+                    Self::Item: IntoIterator,
                 {
                     loop {}
                 }

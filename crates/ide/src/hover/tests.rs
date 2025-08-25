@@ -11026,3 +11026,83 @@ impl Enum<'_, Borrowed> {
         "#]],
     );
 }
+
+#[test]
+fn foobar() {
+    check(
+        r#"
+//- minicore: iterators
+struct Vec<T>(T);
+
+impl<T> Vec<T> {
+    fn new() -> Self {
+        loop {}
+    }
+
+    fn push(&mut self, _: T) {}
+}
+
+struct TyLoweringContext<'db, 'a>;
+struct PathLoweringContext<'a, 'b, 'db>;
+
+impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
+    fn new(
+        ctx: &'a mut TyLoweringContext<'db, 'b>
+    ) -> Self {
+        loop {}
+    }
+
+    fn assoc_type_bindings_from_type_bound<'c>(
+        mut self,
+        trait_ref: TraitRef<'db>,
+    ) -> Option<impl Iterator<Item = Clause<'db>> + use<'a, 'b, 'c, 'db>> {
+        Some([[Clause::<'db>::new()]].iter().flat_map(|it| it))
+    }
+}
+
+impl<'db, 'a> TyLoweringContext<'db, 'a> {
+    fn new() -> Self {
+        loop {}
+    }
+
+    fn lower_type_bound<'b>(
+        &'b mut self,
+        bound: &'b TypeBound,
+    ) -> impl Iterator<Item = Clause<'db>> + use<'b, 'a, 'db> {
+        let x = PathLoweringContext::new(self).assoc_type_binding_from_type_bound(TraitRef::<'db>::new());
+        [Clause::<'db>::new()].into_iter().chain(x.into_iter().flatten())
+    }
+}
+
+struct TypeBound;
+struct Ty<'db>;
+struct Clause<'db>(&'db ());
+
+impl Clause<'db> {
+    fn new() -> Self {
+        loop {}
+    }
+}
+
+struct TraitRef<'db>;
+
+impl TraitRef<'db> {
+    fn new() -> Self{
+        loop {}
+    }
+}
+
+fn foo<'db, 'a>() {
+    let mut x = TyLoweringContext::new();
+    let type_alias_data = [TypeBound];
+    let mut a$0 = Vec::new();
+    for bound in type_alias_data {
+        x.lower_type_bound(bound).for_each(|pred| {
+            a.push(pred);
+        });
+    }
+}
+"#,
+        expect![[]],
+    );
+}

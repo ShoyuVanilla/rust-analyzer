@@ -171,7 +171,9 @@ pub fn layout_of_ty_query<'db>(
     let cx = LayoutCx::new(dl);
     let infer_ctxt = interner.infer_ctxt().build(TypingMode::PostAnalysis);
     let cause = ObligationCause::dummy();
+    dbg!(&ty);
     let ty = deeply_normalize(infer_ctxt.at(&cause, ParamEnv::empty()), ty).unwrap_or(ty);
+    dbg!(&ty);
     let result = match ty.kind() {
         TyKind::Adt(def, args) => {
             match def.inner().id {
