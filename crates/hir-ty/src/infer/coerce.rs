@@ -304,7 +304,7 @@ impl InferenceTable<'_> {
     fn coerce_inner(&mut self, from_ty: Ty, to_ty: &Ty, coerce_never: CoerceNever) -> CoerceResult {
         if from_ty.is_never() {
             if let TyKind::InferenceVar(tv, TyVariableKind::General) = to_ty.kind(Interner) {
-                self.set_diverging(*tv, true);
+                self.set_diverging(*tv, TyVariableKind::General);
             }
             if coerce_never == CoerceNever::Yes {
                 // Subtle: If we are coercing from `!` to `?T`, where `?T` is an unbound

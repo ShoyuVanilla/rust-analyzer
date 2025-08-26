@@ -216,7 +216,7 @@ impl<'db> FulfillmentCtxt<'db> {
         self.obligations.has_pending_obligations()
     }
 
-    fn pending_obligations(&self) -> PredicateObligations<'db> {
+    pub(crate) fn pending_obligations(&self) -> PredicateObligations<'db> {
         self.obligations.clone_pending()
     }
 }

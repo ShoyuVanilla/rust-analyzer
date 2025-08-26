@@ -9,7 +9,6 @@ mod fulfill;
 mod generic_arg;
 pub mod generics;
 pub mod infer;
-//mod infer_new;
 pub mod interner;
 mod ir_print;
 pub mod mapping;
@@ -23,8 +22,9 @@ pub mod util;
 
 pub use consts::*;
 pub use def_id::*;
+pub use fulfill::*;
 pub use generic_arg::*;
-//pub use infer_new::*;
+pub use infer::*;
 pub use interner::*;
 pub use opaques::*;
 pub use predicate::*;

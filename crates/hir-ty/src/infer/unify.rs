@@ -1,6 +1,6 @@
 //! Unification and canonicalization logic.
 
-use std::{fmt, mem};
+use std::{cell::RefCell, fmt, mem, rc::Rc};
 
 use chalk_ir::{
     CanonicalVarKind, FloatTy, IntTy, TyVariableKind, UniverseIndex, cast::Cast,
@@ -12,7 +12,8 @@ use ena::unify::UnifyKey;
 use hir_def::{AdtId, lang_item::LangItem};
 use hir_expand::name::Name;
 use intern::sym;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_type_ir::{FloatVid, IntVid, TyVid, elaborate::Elaboratable, inherent::IntoKind};
 use smallvec::SmallVec;
 use triomphe::Arc;
 
@@ -24,7 +25,14 @@ use crate::{
     TraitRef, Ty, TyBuilder, TyExt, TyKind, VariableKind, WhereClause,
     consteval::unknown_const,
     db::HirDatabase,
-    fold_generic_args, fold_tys_and_consts, to_chalk_trait_id,
+    fold_generic_args, fold_tys_and_consts,
+    next_solver::{
+        DbInterner, FulfillmentCtxt,
+        infer::{DbInternerInferExt, InferCtxt},
+        mapping::ChalkToNextSolver,
+        traits::PredicateObligation,
+    },
+    to_chalk_trait_id,
     traits::{FnTrait, NextTraitSolveResult},
 };
 
@@ -42,45 +50,7 @@ impl InferenceContext<'_> {
     ) -> SmallVec<[WhereClause; 4]> {
         self.table.resolve_obligations_as_possible();
 
-        let root = self.table.var_unification_table.inference_var_root(self_ty);
-        let pending_obligations = mem::take(&mut self.table.pending_obligations);
-        let obligations = pending_obligations
-            .iter()
-            .filter_map(|obligation| match obligation.value.value.goal.data(Interner) {
-                GoalData::DomainGoal(DomainGoal::Holds(clause)) => {
-                    let ty = match clause {
-                        WhereClause::AliasEq(AliasEq {
-                            alias: AliasTy::Projection(projection),
-                            ..
-                        }) => projection.self_type_parameter(self.db),
-                        WhereClause::Implemented(trait_ref) => {
-                            trait_ref.self_type_parameter(Interner)
-                        }
-                        WhereClause::TypeOutlives(to) => to.ty.clone(),
-                        _ => return None,
-                    };
-
-                    let uncanonical =
-                        chalk_ir::Substitute::apply(&obligation.free_vars, ty, Interner);
-                    if matches!(
-                        self.resolve_ty_shallow(&uncanonical).kind(Interner),
-                        TyKind::InferenceVar(iv, TyVariableKind::General) if *iv == root,
-                    ) {
-                        Some(chalk_ir::Substitute::apply(
-                            &obligation.free_vars,
-                            clause.clone(),
-                            Interner,
-                        ))
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .collect();
-        self.table.pending_obligations = pending_obligations;
-
-        obligations
+        todo!("Remove this and follow rustc")
     }
 }
 
@@ -227,16 +197,14 @@ bitflags::bitflags! {
 type ChalkInferenceTable = chalk_solve::infer::InferenceTable<Interner>;
 
 #[derive(Clone)]
-pub(crate) struct InferenceTable<'a> {
-    pub(crate) db: &'a dyn HirDatabase,
+pub(crate) struct InferenceTable<'db> {
+    pub(crate) db: &'db dyn HirDatabase,
     pub(crate) trait_env: Arc<TraitEnvironment>,
     pub(crate) tait_coercion_table: Option<FxHashMap<OpaqueTyId, Ty>>,
-    var_unification_table: ChalkInferenceTable,
-    type_variable_table: SmallVec<[TypeVariableFlags; 16]>,
-    pending_obligations: Vec<Canonicalized<InEnvironment<Goal>>>,
-    /// Double buffer used in [`Self::resolve_obligations_as_possible`] to cut down on
-    /// temporary allocations.
-    resolve_obligations_buffer: Vec<Canonicalized<InEnvironment<Goal>>>,
+    interner: DbInterner<'db>,
+    infer_ctx: Rc<InferCtxt<'db>>,
+    diverging_tys: FxHashSet<Ty>,
+    fulfillment_ctx: Rc<RefCell<FulfillmentCtxt<'db>>>,
 }
 
 pub(crate) struct InferenceTableSnapshot {
@@ -245,16 +213,21 @@ pub(crate) struct InferenceTableSnapshot {
     pending_obligations: Vec<Canonicalized<InEnvironment<Goal>>>,
 }
 
-impl<'a> InferenceTable<'a> {
-    pub(crate) fn new(db: &'a dyn HirDatabase, trait_env: Arc<TraitEnvironment>) -> Self {
+impl<'db> InferenceTable<'db> {
+    pub(crate) fn new(db: &'db dyn HirDatabase, trait_env: Arc<TraitEnvironment>) -> Self {
+        let interner = DbInterner::new_with(db, Some(trait_env.krate), trait_env.block);
+        let infer_ctx =
+            Rc::new(interner.infer_ctxt().build(rustc_type_ir::TypingMode::non_body_analysis()));
+        let fulfillment_ctx = Rc::new(RefCell::new(FulfillmentCtxt::new(&infer_ctx)));
+
         InferenceTable {
             db,
             trait_env,
             tait_coercion_table: None,
-            var_unification_table: ChalkInferenceTable::new(),
-            type_variable_table: SmallVec::new(),
-            pending_obligations: Vec::new(),
-            resolve_obligations_buffer: Vec::new(),
+            interner,
+            infer_ctx,
+            diverging_tys: FxHashSet::default(),
+            fulfillment_ctx,
         }
     }
 
@@ -265,29 +238,64 @@ impl<'a> InferenceTable<'a> {
     /// marked as diverging if necessary, so that resolving them gives the right
     /// result.
     pub(super) fn propagate_diverging_flag(&mut self) {
-        for i in 0..self.type_variable_table.len() {
-            if !self.type_variable_table[i].contains(TypeVariableFlags::DIVERGING) {
-                continue;
+        let mut new_tys = FxHashSet::default();
+        for ty in self.diverging_tys.iter() {
+            match ty.kind(Interner) {
+                TyKind::InferenceVar(var, kind) => match kind {
+                    TyVariableKind::General => {
+                        let root = InferenceVar::from(
+                            self.infer_ctx.root_var(TyVid::from_u32(var.index())).as_u32(),
+                        );
+
+                        if root.index() != var.index() {
+                            new_tys.insert(TyKind::InferenceVar(root, *kind).intern(Interner));
+                        }
+                    }
+
+                    TyVariableKind::Integer => {
+                        let root = InferenceVar::from(
+                            self.infer_ctx
+                                .inner
+                                .borrow_mut()
+                                .int_unification_table()
+                                .find(IntVid::from_usize(var.index() as usize))
+                                .as_u32(),
+                        );
+
+                        if root.index() != var.index() {
+                            new_tys.insert(TyKind::InferenceVar(root, *kind).intern(Interner));
+                        }
+                    }
+
+                    TyVariableKind::Float => {
+                        let root = InferenceVar::from(
+                            self.infer_ctx
+                                .inner
+                                .borrow_mut()
+                                .float_unification_table()
+                                .find(FloatVid::from_usize(var.index() as usize))
+                                .as_u32(),
+                        );
+
+                        if root.index() != var.index() {
+                            new_tys.insert(TyKind::InferenceVar(root, *kind).intern(Interner));
+                        }
+                    }
+                },
+
+                _ => {}
             }
-            let v = InferenceVar::from(i as u32);
-            let root = self.var_unification_table.inference_var_root(v);
-            self.modify_type_variable_flag(root, |f| {
-                *f |= TypeVariableFlags::DIVERGING;
-            });
         }
+        self.diverging_tys.extend(new_tys.into_iter());
     }
 
-    pub(super) fn set_diverging(&mut self, iv: InferenceVar, diverging: bool) {
-        self.modify_type_variable_flag(iv, |f| {
-            f.set(TypeVariableFlags::DIVERGING, diverging);
-        });
+    pub(super) fn set_diverging(&mut self, iv: InferenceVar, kind: TyVariableKind) {
+        self.diverging_tys.insert(TyKind::InferenceVar(iv, kind).intern(Interner));
     }
 
     fn fallback_value(&self, iv: InferenceVar, kind: TyVariableKind) -> Ty {
-        let is_diverging = self
-            .type_variable_table
-            .get(iv.index() as usize)
-            .is_some_and(|data| data.contains(TypeVariableFlags::DIVERGING));
+        let is_diverging =
+            self.diverging_tys.contains(&TyKind::InferenceVar(iv, kind).intern(Interner));
         if is_diverging {
             return TyKind::Never.intern(Interner);
         }
@@ -512,18 +520,6 @@ impl<'a> InferenceTable<'a> {
         var
     }
 
-    fn modify_type_variable_flag<F>(&mut self, var: InferenceVar, cb: F)
-    where
-        F: FnOnce(&mut TypeVariableFlags),
-    {
-        let idx = var.index() as usize;
-        if self.type_variable_table.len() <= idx {
-            self.extend_type_variable_table(idx);
-        }
-        if let Some(f) = self.type_variable_table.get_mut(idx) {
-            cb(f);
-        }
-    }
     fn extend_type_variable_table(&mut self, to_index: usize) {
         let count = to_index - self.type_variable_table.len() + 1;
         self.type_variable_table.extend(std::iter::repeat_n(TypeVariableFlags::default(), count));

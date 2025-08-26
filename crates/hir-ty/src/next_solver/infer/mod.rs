@@ -189,12 +189,12 @@ impl<'db> InferCtxtInner<'db> {
     }
 
     #[inline]
-    fn int_unification_table(&mut self) -> UnificationTable<'_, 'db, IntVid> {
+    pub(crate) fn int_unification_table(&mut self) -> UnificationTable<'_, 'db, IntVid> {
         self.int_unification_storage.with_log(&mut self.undo_log)
     }
 
     #[inline]
-    fn float_unification_table(&mut self) -> UnificationTable<'_, 'db, FloatVid> {
+    pub(crate) fn float_unification_table(&mut self) -> UnificationTable<'_, 'db, FloatVid> {
         self.float_unification_storage.with_log(&mut self.undo_log)
     }
 
